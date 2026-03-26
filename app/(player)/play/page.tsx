@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Hexagon, MapPin, Send, ImageIcon, ShieldCheck, Lightbulb, QrCode, X, Trophy, MessageSquare,
+  Hexagon, MapPin, Send, ImageIcon, ShieldCheck, Lightbulb, QrCode, X, Trophy, MessageSquare, Compass, Search,
 } from "lucide-react";
 import { Button, Card, Loader } from "@/components/shared";
 import { usePlayerStore } from "@/lib/store";
@@ -26,12 +26,15 @@ function parseQCMChoices(enigme: string) {
 
 const QCM_LETTERS = ["A", "B", "C", "D", "E", "F"];
 
+interface HintData { level: number; text: string }
+
 export default function PlayPage() {
   const router = useRouter();
   const session = usePlayerStore((s) => s.session);
   const team = usePlayerStore((s) => s.team);
   const teamCharacter = usePlayerStore((s) => s.teamCharacter);
   const steps = usePlayerStore((s) => s.steps);
+  const objects = usePlayerStore((s) => s.objects);
   const currentStep = usePlayerStore((s) => s.currentStep);
   const currentStepIndex = usePlayerStore((s) => s.currentStepIndex);
   const score = usePlayerStore((s) => s.score);
@@ -49,21 +52,21 @@ export default function PlayPage() {
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "error" | "info"; msg: string } | null>(null);
   const [shaking, setShaking] = useState(false);
-  const [hintData, setHintData] = useState<{ text: string | null; photoUrl: string | null } | null>(null);
-  const [hintLoading, setHintLoading] = useState(false);
+  const [hints, setHints] = useState<HintData[]>([]);
+  const [hintLoading, setHintLoading] = useState<number | null>(null);
+  const [usedHintLevels, setUsedHintLevels] = useState<number[]>([]);
   const [loadingGame, setLoadingGame] = useState(false);
   const [photoExpanded, setPhotoExpanded] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Realtime: listen for admin messages
+  // Realtime admin messages
   useEffect(() => {
     if (!team) return;
     const ch = supabase
       .channel(`msg-${team.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "team_messages", filter: `team_id=eq.${team.id}` },
         (payload) => {
-          const msg = (payload.new as { message: string }).message;
-          setToast(msg);
+          setToast((payload.new as { message: string }).message);
           setTimeout(() => setToast(null), 10000);
         })
       .subscribe();
@@ -97,14 +100,13 @@ export default function PlayPage() {
     if (team && session && steps.length === 0) loadGameState();
   }, [team, session, steps.length, loadGameState]);
 
-  // Start step timer when step changes
   useEffect(() => {
-    if (currentStep) setStepStartTime(Date.now());
+    if (currentStep) { setStepStartTime(Date.now()); setHints([]); setUsedHintLevels([]); setAnswer(""); }
   }, [currentStep, setStepStartTime]);
 
   if (!session || !team) { router.push("/"); return null; }
 
-  // Quest complete — go to map
+  // Quest complete
   const allComplete = steps.length > 0 && !progress.find((p) => p.status === "active" || p.status === "locked");
   if (allComplete) {
     return (
@@ -146,6 +148,15 @@ export default function PlayPage() {
   const teamColor = teamCharacter?.color ?? "#7F77DD";
   const initials = team.name.slice(0, 2).toUpperCase();
 
+  // Get current object name for scan context
+  const currentObject = objects.find((o) => o.id === step.object_id);
+  const objectName = currentObject?.name ?? "the artifact";
+  const objectDesc = currentObject?.description ?? "";
+
+  // Check if this is the first step and hasn't been scanned yet
+  const currentProgress = progress.find((p) => p.step_id === step.id);
+  const isFirstStep = currentStepIndex === 0 && currentProgress?.status === "active";
+
   async function handleSubmitAnswer() {
     if (!answer.trim() || submitting) return;
     setSubmitting(true);
@@ -160,7 +171,6 @@ export default function PlayPage() {
       const result = json.data as { correct: boolean; message: string } | null;
 
       if (result?.correct) {
-        // Update progress optimistically
         const updated = progress.map((p) =>
           p.step_id === step.id ? { ...p, status: "completed" as const, completed_at: new Date().toISOString() } : p
         );
@@ -180,28 +190,37 @@ export default function PlayPage() {
     }
   }
 
-  async function handleHint() {
-    if (hintLoading) return;
-    setHintLoading(true);
+  async function requestHint(level: number) {
+    if (hintLoading !== null || usedHintLevels.includes(level)) return;
+    setHintLoading(level);
     try {
       const res = await fetch("/api/hint", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ team_id: team!.id, step_id: step.id }),
+        body: JSON.stringify({ team_id: team!.id, step_id: step.id, hint_level: level }),
       });
       const json: ApiResponse = await res.json();
-      const data = json.data as { hint_text: string | null; hint_photo_url: string | null; hints_used: number; penalty: number } | null;
+      const data = json.data as { hint_text: string; penalty: number; hint_type: string } | null;
       if (data) {
-        setHintData({ text: data.hint_text, photoUrl: data.hint_photo_url });
+        setHints((prev) => [...prev, { level, text: data.hint_text }]);
+        setUsedHintLevels((prev) => [...prev, level]);
         setScore(Math.max(0, score - data.penalty));
+      } else if (json.error) {
+        setFeedback({ type: "info", msg: json.error });
       }
     } catch { /* silent */ }
-    finally { setHintLoading(false); }
+    finally { setHintLoading(null); }
   }
+
+  const HINT_BUTTONS = [
+    { level: 1, label: "Rephrase", cost: 15, color: "text-amber", bg: "border-amber/20" },
+    { level: 2, label: "Direction", cost: 25, color: "text-orange-400", bg: "border-orange-400/20" },
+    { level: 3, label: "Answer", cost: 50, color: "text-red-400", bg: "border-red-400/20" },
+  ];
 
   return (
     <main className="flex min-h-[100dvh] flex-col pb-6">
-      {/* Admin message toast */}
+      {/* Toast */}
       {toast && (
         <div className="fixed left-4 right-4 top-4 z-50 flex items-start gap-3 rounded-xl bg-amber/95 px-4 py-3 shadow-lg" onClick={() => setToast(null)}>
           <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-deep" />
@@ -209,13 +228,12 @@ export default function PlayPage() {
           <button className="ml-auto shrink-0 text-deep/60"><X className="h-4 w-4" /></button>
         </div>
       )}
-      {/* ── Minimal header ── */}
+
+      {/* Header */}
       <div className="sticky top-0 z-10 border-b border-white/5 bg-deep/95 px-4 py-3 backdrop-blur-md">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ backgroundColor: teamColor }}>
-              {initials}
-            </div>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ backgroundColor: teamColor }}>{initials}</div>
             <span className="text-sm font-semibold">Chapter {currentStepIndex + 1} of {steps.length}</span>
           </div>
           <div className="flex items-center gap-1.5 text-amber">
@@ -224,7 +242,7 @@ export default function PlayPage() {
           </div>
         </div>
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/5">
-          <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${((currentStepIndex) / steps.length) * 100}%` }} />
+          <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${(currentStepIndex / steps.length) * 100}%` }} />
         </div>
       </div>
 
@@ -235,7 +253,7 @@ export default function PlayPage() {
           <p className="text-sm italic leading-relaxed text-gray-300">{step.text_narratif || "Explore your surroundings..."}</p>
         </div>
 
-        {/* Photo indice */}
+        {/* Photo */}
         {step.photo_indice_url && (
           <>
             <button onClick={() => setPhotoExpanded(true)} className="w-full overflow-hidden rounded-2xl border border-white/5">
@@ -250,14 +268,15 @@ export default function PlayPage() {
           </>
         )}
 
-        {/* Hint */}
-        {hintData && (
-          <Card className="border-amber/20 bg-amber/5">
-            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.2em] text-amber">Hint</span>
-            {hintData.text && <p className="text-sm text-amber/90">{hintData.text}</p>}
-            {hintData.photoUrl && <img src={hintData.photoUrl} alt="Hint" className="mt-2 w-full rounded-lg object-cover" style={{ maxHeight: 150 }} />}
+        {/* Hints display */}
+        {hints.map((h, i) => (
+          <Card key={i} className={`${h.level === 3 ? "border-red-400/20 bg-red-500/5" : h.level === 2 ? "border-orange-400/20 bg-orange-500/5" : "border-amber/20 bg-amber/5"}`}>
+            <span className={`mb-1 block text-[10px] font-semibold uppercase tracking-[0.2em] ${h.level === 3 ? "text-red-400" : h.level === 2 ? "text-orange-400" : "text-amber"}`}>
+              {h.level === 3 ? "Answer Revealed" : h.level === 2 ? "Direction" : "Hint"}
+            </span>
+            <p className={`text-sm ${h.level === 3 ? "text-red-300" : h.level === 2 ? "text-orange-300" : "text-amber/90"}`}>{h.text}</p>
           </Card>
-        )}
+        ))}
 
         {/* Enigma */}
         <Card className={`bg-surface ${shaking ? "animate-shake" : ""}`}>
@@ -308,7 +327,7 @@ export default function PlayPage() {
               <ImageIcon className="h-8 w-8 text-gray-500" />
               <span className="text-sm text-gray-400">Capture evidence</span>
               <input type="file" accept="image/*" capture="environment" className="hidden"
-                onChange={() => setFeedback({ type: "info", msg: "Photo submitted! A Guardian will verify." })} />
+                onChange={() => setFeedback({ type: "info", msg: "Photo submitted!" })} />
             </label>
           )}
 
@@ -329,18 +348,39 @@ export default function PlayPage() {
         )}
       </div>
 
-      {/* Bottom actions */}
-      <div className="px-4 pt-2">
-        <div className="flex gap-3">
-          <button onClick={handleHint} disabled={hintLoading}
-            className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-surface px-4 py-3 text-xs text-gray-400 transition hover:text-amber disabled:opacity-50">
-            <Lightbulb className="h-4 w-4" />
-            Hint <span className="text-amber/70">-15</span>
-          </button>
-          <Button onClick={() => router.push("/scan")} className="flex flex-1 items-center justify-center gap-2">
-            <QrCode className="h-5 w-5" /> Decipher the Sigil
-          </Button>
-        </div>
+      {/* Bottom: 3 hint buttons + scan */}
+      <div className="space-y-2 px-4 pt-2">
+        {/* Hint buttons row */}
+        {enigmaType !== "staff" && (
+          <div className="flex gap-2">
+            {HINT_BUTTONS.map((h) => {
+              const used = usedHintLevels.includes(h.level);
+              const isLoading = hintLoading === h.level;
+              return (
+                <button
+                  key={h.level}
+                  onClick={() => requestHint(h.level)}
+                  disabled={used || isLoading || hintLoading !== null}
+                  className={`flex flex-1 flex-col items-center gap-0.5 rounded-xl border bg-surface px-2 py-2.5 text-[10px] transition disabled:opacity-30 ${h.bg}`}
+                >
+                  {isLoading ? (
+                    <Lightbulb className="h-4 w-4 animate-pulse text-gray-400" />
+                  ) : (
+                    <Lightbulb className={`h-4 w-4 ${used ? "text-gray-600" : h.color}`} />
+                  )}
+                  <span className={used ? "text-gray-600 line-through" : "text-gray-400"}>{h.label}</span>
+                  <span className={used ? "text-gray-600" : h.color}>-{h.cost}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Scan button with object context */}
+        <Button onClick={() => router.push("/scan")} className="flex w-full items-center justify-center gap-2">
+          <QrCode className="h-5 w-5" />
+          <span className="truncate">Scan: {objectName}</span>
+        </Button>
       </div>
     </main>
   );

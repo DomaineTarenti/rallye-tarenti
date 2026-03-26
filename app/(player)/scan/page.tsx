@@ -18,7 +18,14 @@ export default function ScanPage() {
   const router = useRouter();
   const team = usePlayerStore((s) => s.team);
   const session = usePlayerStore((s) => s.session);
+  const currentStep = usePlayerStore((s) => s.currentStep);
+  const objects = usePlayerStore((s) => s.objects);
   const setCurrentStep = usePlayerStore((s) => s.setCurrentStep);
+
+  // Get current object info for context
+  const currentObject = currentStep ? objects.find((o) => o.id === currentStep.object_id) : null;
+  const objectName = currentObject?.name ?? "the artifact";
+  const objectDesc = currentObject?.description ?? "";
 
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
@@ -163,7 +170,10 @@ export default function ScanPage() {
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <h1 className="text-lg font-bold">Decipher the Sigil</h1>
+        <div>
+          <h1 className="text-lg font-bold">Decipher the Sigil</h1>
+          <p className="text-xs text-gray-500 truncate max-w-[200px]">{objectName}</p>
+        </div>
       </div>
 
       <div className="flex flex-1 flex-col items-center px-4">
@@ -225,9 +235,12 @@ export default function ScanPage() {
               <p className="mb-4 animate-pulse text-sm text-primary">Deciphering sigil...</p>
             )}
 
-            <p className="mb-6 text-center text-sm text-gray-500">
-              Aim your device at the sigil on the artifact
+            <p className="mb-2 text-center text-sm text-gray-300">
+              Point your device at <span className="font-medium text-primary">{objectName}</span>
             </p>
+            {objectDesc && (
+              <p className="mb-6 text-center text-xs text-gray-500">{objectDesc}</p>
+            )}
           </>
         )}
 

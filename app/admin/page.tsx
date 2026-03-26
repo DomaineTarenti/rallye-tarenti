@@ -60,7 +60,10 @@ export default function AdminDashboard() {
       const res = await fetch(`/api/session?id=${id}`, { method: "DELETE" });
       const json = await res.json();
       if (json.error) { alert(json.error); return; }
-      setSessions((prev) => prev.filter((s) => s.id !== id));
+      // Refetch from API to ensure persistence
+      const reload = await fetch("/api/session?all=true");
+      const reloadJson: ApiResponse = await reload.json();
+      if (reloadJson.data) setSessions(reloadJson.data as SessionWithCount[]);
     } catch { /* silent */ }
   }
 
