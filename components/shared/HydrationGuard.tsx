@@ -1,23 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { usePlayerStore } from "@/lib/store";
+import { useSyncExternalStore } from "react";
 
 /**
- * Prevents rendering children until Zustand persist has rehydrated
- * from localStorage. This avoids React hydration mismatches (Error #310)
- * between server (empty store) and client (populated store).
+ * Prevents rendering children until the component has mounted on the client.
+ * This avoids React hydration mismatches (Error #310) caused by
+ * Zustand persist reading localStorage (which doesn't exist on the server).
+ *
+ * Uses useSyncExternalStore for correct concurrent mode behavior.
  */
+
+const emptySubscribe = () => () => {};
+
 export function HydrationGuard({ children }: { children: React.ReactNode }) {
-  const hasHydrated = usePlayerStore((s) => s._hasHydrated);
-  const [mounted, setMounted] = useState(false);
+  const isClient = useSyncExternalStore(
+    emptySubscribe,
+    () => true,  // client: mounted
+    () => false  // server: not mounted
+  );
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // Wait for both: component mount AND store rehydration
-  if (!mounted || !hasHydrated) return null;
+  if (!isClient) return null;
 
   return <>{children}</>;
 }

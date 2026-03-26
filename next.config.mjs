@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // PWA headers and image optimization
+  reactStrictMode: true,
   images: {
     remotePatterns: [
       {
