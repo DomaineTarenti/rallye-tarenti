@@ -33,13 +33,21 @@ export default function AdminDashboard() {
   const [sessions, setSessions] = useState<SessionWithCount[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     async function load() {
       try {
         const res = await fetch("/api/session?all=true");
         const json: ApiResponse = await res.json();
-        if (json.data) setSessions(json.data as SessionWithCount[]);
-      } catch { /* silent */ }
+        if (json.error) {
+          setError(json.error);
+        } else if (json.data) {
+          setSessions(json.data as SessionWithCount[]);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to load sessions");
+      }
       setLoading(false);
     }
     load();
@@ -52,6 +60,23 @@ export default function AdminDashboard() {
     return (
       <div className="flex h-96 items-center justify-center">
         <Loader text="Loading dashboard..." />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-96 flex-col items-center justify-center gap-3 p-6">
+        <p className="text-sm text-red-600">Error: {error}</p>
+        <p className="text-xs text-gray-400">
+          Make sure you ran <code className="rounded bg-gray-100 px-1.5 py-0.5">supabase/admin-policies.sql</code> in the Supabase SQL Editor.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700"
+        >
+          Retry
+        </button>
       </div>
     );
   }

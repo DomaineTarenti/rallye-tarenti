@@ -32,9 +32,10 @@ export async function GET(req: NextRequest) {
 
   // Admin: list all sessions
   if (all === "true") {
-    const { data, error } = await supabase
+    // Fetch sessions without join (avoids RLS issues on related tables)
+    const { data: sessionsData, error } = await supabase
       .from("sessions")
-      .select("*, teams(id)")
+      .select("*")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -44,10 +45,24 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const sessions = (data ?? []).map((s) => ({
+    // Fetch team counts separately
+    const sessionIds = (sessionsData ?? []).map((s) => s.id);
+    let teamCounts: Record<string, number> = {};
+
+    if (sessionIds.length > 0) {
+      const { data: teamsData } = await supabase
+        .from("teams")
+        .select("session_id")
+        .in("session_id", sessionIds);
+
+      for (const t of teamsData ?? []) {
+        teamCounts[t.session_id] = (teamCounts[t.session_id] ?? 0) + 1;
+      }
+    }
+
+    const sessions = (sessionsData ?? []).map((s) => ({
       ...s,
-      team_count: Array.isArray(s.teams) ? s.teams.length : 0,
-      teams: undefined,
+      team_count: teamCounts[s.id] ?? 0,
     }));
 
     return NextResponse.json<ApiResponse>({ data: sessions, error: null });
