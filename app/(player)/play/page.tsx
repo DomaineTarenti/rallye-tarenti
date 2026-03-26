@@ -3,23 +3,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Trophy,
-  MapPin,
-  Send,
-  ImageIcon,
-  ShieldCheck,
-  Hexagon,
-  X,
-  CheckCircle2,
-  BookOpen,
-  Lock,
-  Check,
-  Gem,
+  Hexagon, MapPin, Send, ImageIcon, ShieldCheck, Lightbulb, QrCode, X, Trophy,
 } from "lucide-react";
-import { Button, Card, Loader, BottomNav } from "@/components/shared";
+import { Button, Card, Loader } from "@/components/shared";
 import { usePlayerStore } from "@/lib/store";
-import { calculateScore } from "@/lib/scoring";
-import type { ApiResponse, Step, TeamProgress, ScoringConfig } from "@/lib/types";
+import type { ApiResponse, Step, TeamProgress } from "@/lib/types";
 
 function getEnigmaInputType(step: Step): "text" | "code" | "qcm" | "photo" | "staff" {
   if (step.type === "epreuve") return "staff";
@@ -53,29 +41,17 @@ export default function PlayPage() {
   const setCurrentStep = usePlayerStore((s) => s.setCurrentStep);
   const setCurrentStepIndex = usePlayerStore((s) => s.setCurrentStepIndex);
   const setScore = usePlayerStore((s) => s.setScore);
+  const setCurrentStepScore = usePlayerStore((s) => s.setCurrentStepScore);
+  const setStepStartTime = usePlayerStore((s) => s.setStepStartTime);
 
   const [answer, setAnswer] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
+  const [feedback, setFeedback] = useState<{ type: "error" | "info"; msg: string } | null>(null);
   const [shaking, setShaking] = useState(false);
   const [hintData, setHintData] = useState<{ text: string | null; photoUrl: string | null } | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
   const [loadingGame, setLoadingGame] = useState(false);
-  const [questComplete, setQuestComplete] = useState(false);
-  const [showJournal, setShowJournal] = useState(false);
-  const [showRank, setShowRank] = useState(false);
-  const [rankTeams, setRankTeams] = useState<Array<{ name: string; score: number; character: string | null }>>([]);
   const [photoExpanded, setPhotoExpanded] = useState(false);
-
-  // Auto-scroll progress map to center active step
-  useEffect(() => {
-    const el = document.getElementById("progress-map");
-    if (el) {
-      const nodeWidth = 44;
-      const scrollTo = currentStepIndex * nodeWidth - el.clientWidth / 2 + nodeWidth / 2;
-      el.scrollTo({ left: Math.max(0, scrollTo), behavior: "smooth" });
-    }
-  }, [currentStepIndex]);
 
   const loadGameState = useCallback(async () => {
     if (!team || !session) return;
@@ -89,98 +65,69 @@ export default function PlayPage() {
         setSteps(d.steps as never[]);
         setProgress(d.progress as never[]);
         setScore(d.score as number);
-
         const prog = d.progress as TeamProgress[];
         const stepsList = d.steps as Step[];
-        const activeProgress = prog.find((p) => p.status === "active");
-        if (activeProgress) {
-          const activeStep = stepsList.find((s) => s.id === activeProgress.step_id);
-          if (activeStep) {
-            setCurrentStep(activeStep);
-            setCurrentStepIndex(stepsList.indexOf(activeStep));
-          }
-        } else {
-          setQuestComplete(true);
+        const active = prog.find((p) => p.status === "active");
+        if (active) {
+          const s = stepsList.find((s) => s.id === active.step_id);
+          if (s) { setCurrentStep(s); setCurrentStepIndex(stepsList.indexOf(s)); }
         }
       }
-    } catch { /* use cache */ } finally {
-      setLoadingGame(false);
-    }
+    } catch { /* cache */ } finally { setLoadingGame(false); }
   }, [team, session, setObjects, setSteps, setProgress, setScore, setCurrentStep, setCurrentStepIndex]);
 
   useEffect(() => {
     if (team && session && steps.length === 0) loadGameState();
   }, [team, session, steps.length, loadGameState]);
 
+  // Start step timer when step changes
+  useEffect(() => {
+    if (currentStep) setStepStartTime(Date.now());
+  }, [currentStep, setStepStartTime]);
+
   if (!session || !team) { router.push("/"); return null; }
 
-  if (loadingGame) {
+  // Quest complete — go to map
+  const allComplete = steps.length > 0 && !progress.find((p) => p.status === "active" || p.status === "locked");
+  if (allComplete) {
     return (
-      <main className="flex min-h-[100dvh] flex-col pb-20">
-        {/* Skeleton header */}
+      <main className="flex min-h-[100dvh] flex-col items-center justify-center px-6 pb-6">
+        <Trophy className="mb-4 h-16 w-16 text-amber" />
+        <h1 className="mb-2 text-2xl font-bold">Quest Complete!</h1>
+        <p className="mb-4 text-gray-400">Congratulations, {team.name}!</p>
+        <Card className="mb-6 w-full max-w-sm bg-surface text-center">
+          <div className="flex items-center justify-center gap-2">
+            <Hexagon className="h-5 w-5 text-amber" />
+            <span className="text-3xl font-bold text-amber">{score} RP</span>
+          </div>
+        </Card>
+        <Button onClick={() => router.push("/map")} className="w-full max-w-sm">View your journey</Button>
+      </main>
+    );
+  }
+
+  if (loadingGame || !currentStep) {
+    return (
+      <main className="flex min-h-[100dvh] flex-col pb-6">
         <div className="border-b border-white/5 bg-deep/95 px-4 py-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 animate-pulse rounded-lg bg-white/10" />
-              <div className="h-4 w-24 animate-pulse rounded bg-white/10" />
-            </div>
+            <div className="h-4 w-24 animate-pulse rounded bg-white/10" />
             <div className="h-4 w-16 animate-pulse rounded bg-white/10" />
           </div>
           <div className="mt-2 h-1 animate-pulse rounded-full bg-white/5" />
         </div>
-        {/* Skeleton content */}
         <div className="space-y-4 px-4 pt-4">
-          <div className="h-24 animate-pulse rounded-2xl bg-surface" />
-          <div className="h-32 animate-pulse rounded-2xl bg-surface" />
-          <div className="h-20 animate-pulse rounded-2xl bg-surface" />
+          <div className="h-28 animate-pulse rounded-2xl bg-surface" />
+          <div className="h-36 animate-pulse rounded-2xl bg-surface" />
         </div>
-        <BottomNav />
       </main>
     );
   }
 
-  // Quest complete
-  if (questComplete || (steps.length > 0 && !currentStep)) {
-    return (
-      <main className="flex min-h-[100dvh] flex-col items-center justify-center px-6 pb-20">
-        <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-amber/20">
-          <Trophy className="h-10 w-10 text-amber" />
-        </div>
-        <h1 className="mb-2 text-2xl font-bold">Quest Complete!</h1>
-        <p className="mb-6 text-gray-400">Congratulations, {team.name}!</p>
-        <Card className="mb-6 w-full max-w-sm bg-surface text-center">
-          <p className="text-xs uppercase tracking-wider text-gray-500">Final Rank Points</p>
-          <div className="mt-1 flex items-center justify-center gap-2">
-            <Hexagon className="h-5 w-5 text-amber" />
-            <span className="text-4xl font-bold text-amber">{score}</span>
-            <span className="text-sm text-gray-500">RP</span>
-          </div>
-        </Card>
-        <Button onClick={() => router.push("/")} variant="secondary">Return Home</Button>
-        <BottomNav />
-      </main>
-    );
-  }
-
-  // No steps
-  if (steps.length === 0) {
-    return (
-      <main className="flex min-h-[100dvh] flex-col items-center justify-center px-6 pb-20">
-        <MapPin className="mb-4 h-12 w-12 text-gray-600" />
-        <h2 className="mb-2 text-lg font-bold">Awaiting Orders</h2>
-        <p className="text-center text-sm text-gray-400">
-          The quest path has not yet been configured. Await your organiser.
-        </p>
-        <Button onClick={loadGameState} variant="secondary" className="mt-6">Refresh</Button>
-        <BottomNav />
-      </main>
-    );
-  }
-
-  const step = currentStep!;
+  const step = currentStep;
   const enigmaType = getEnigmaInputType(step);
-  const currentProgress = progress.find((p) => p.step_id === step.id);
   const teamColor = teamCharacter?.color ?? "#7F77DD";
+  const initials = team.name.slice(0, 2).toUpperCase();
 
   async function handleSubmitAnswer() {
     if (!answer.trim() || submitting) return;
@@ -196,32 +143,21 @@ export default function PlayPage() {
       const result = json.data as { correct: boolean; message: string } | null;
 
       if (result?.correct) {
-        setFeedback({ type: "success", message: "Correct! Well done." });
-        // Recalculate score with updated progress
-        const updatedProgress = progress.map((p) =>
+        // Update progress optimistically
+        const updated = progress.map((p) =>
           p.step_id === step.id ? { ...p, status: "completed" as const, completed_at: new Date().toISOString() } : p
         );
-        setProgress(updatedProgress);
-        setScore(calculateScore(null, updatedProgress as TeamProgress[]));
-        setTimeout(() => {
-          const nextIdx = currentStepIndex + 1;
-          if (nextIdx < steps.length) {
-            setCurrentStepIndex(nextIdx);
-            setCurrentStep(steps[nextIdx]);
-            setAnswer("");
-            setFeedback(null);
-            setHintData(null);
-          } else {
-            setQuestComplete(true);
-          }
-        }, 2000);
+        setProgress(updated);
+        setCurrentStepScore(30);
+        setScore(score + 30);
+        router.push("/celebrate");
       } else {
-        setFeedback({ type: "error", message: result?.message ?? "Incorrect answer" });
+        setFeedback({ type: "error", msg: result?.message ?? "Not quite... try again!" });
         setShaking(true);
         setTimeout(() => setShaking(false), 400);
       }
     } catch {
-      setFeedback({ type: "error", message: "Connection error" });
+      setFeedback({ type: "error", msg: "Connection error" });
     } finally {
       setSubmitting(false);
     }
@@ -241,82 +177,21 @@ export default function PlayPage() {
       if (data) {
         setHintData({ text: data.hint_text, photoUrl: data.hint_photo_url });
         setScore(Math.max(0, score - data.penalty));
-        setProgress(progress.map((p) => p.step_id === step.id ? { ...p, hints_used: data.hints_used } : p));
-      }
-    } catch {
-      setFeedback({ type: "error", message: "Failed to request hint" });
-    } finally {
-      setHintLoading(false);
-    }
-  }
-
-  async function loadRankings() {
-    setShowRank(true);
-    try {
-      const res = await fetch(`/api/teams?session_id=${session!.id}`);
-      const json: ApiResponse = await res.json();
-      if (json.data) {
-        const allTeams = (json.data as Array<{ name: string; hints_used: number; character: string | null; completed_steps: number; id: string }>)
-          .map((t) => ({
-            name: t.name,
-            score: Math.max(0, 1000 - t.hints_used * 15),
-            character: (() => { try { return JSON.parse(t.character ?? "{}").animalEmoji ?? null; } catch { return null; } })(),
-            isMe: t.id === team!.id,
-          }))
-          .sort((a, b) => b.score - a.score);
-
-        // TOP 10 + own team if not in top 10
-        const top10 = allTeams.slice(0, 10);
-        const myIdx = allTeams.findIndex((t) => t.isMe);
-        const myTeam = myIdx >= 0 ? { ...allTeams[myIdx], rank: myIdx + 1 } : null;
-
-        const combined = top10.map((t, i) => ({ ...t, rank: i + 1 }));
-        if (myTeam && myIdx >= 10) {
-          combined.push({ ...myTeam, name: `--- #${myTeam.rank} ${myTeam.name} (you)` });
-        }
-
-        setRankTeams(combined as never);
       }
     } catch { /* silent */ }
+    finally { setHintLoading(false); }
   }
 
-  // Badge initials
-  const initials = team.name.slice(0, 2).toUpperCase();
-
-  // Completed steps for journal
-  const completedSteps = steps.filter((s, i) => {
-    const p = progress.find((pr) => pr.step_id === s.id);
-    return p?.status === "completed";
-  });
-
-  // Step statuses for the map
-  const stepStatuses = steps.map((s) => {
-    const p = progress.find((pr) => pr.step_id === s.id);
-    return p?.status ?? "locked";
-  });
-
-  const [mapTapped, setMapTapped] = useState<number | null>(null);
-
   return (
-    <main className="flex min-h-[100dvh] flex-col pb-20">
-      {/* ── Header with team code ── */}
+    <main className="flex min-h-[100dvh] flex-col pb-6">
+      {/* ── Minimal header ── */}
       <div className="sticky top-0 z-10 border-b border-white/5 bg-deep/95 px-4 py-3 backdrop-blur-md">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white"
-              style={{ backgroundColor: teamColor }}
-            >
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ backgroundColor: teamColor }}>
               {initials}
             </div>
-            <div>
-              <span className="text-sm font-semibold">
-                Chapter {currentStepIndex + 1} of {steps.length}
-              </span>
-              {teamCharacter?.teamCode && (
-                <p className="font-mono text-[10px] text-gray-500">{teamCharacter.teamCode}</p>
-              )}
-            </div>
+            <span className="text-sm font-semibold">Chapter {currentStepIndex + 1} of {steps.length}</span>
           </div>
           <div className="flex items-center gap-1.5 text-amber">
             <Hexagon className="h-4 w-4" />
@@ -324,95 +199,21 @@ export default function PlayPage() {
           </div>
         </div>
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/5">
-          <div
-            className="h-full rounded-full bg-primary transition-all duration-700"
-            style={{ width: `${((currentStepIndex + 1) / steps.length) * 100}%` }}
-          />
-        </div>
-      </div>
-
-      {/* ── Progress Map — "The Treasure Path" ── */}
-      <div className="border-b border-white/5 bg-surface/50 px-2 py-3">
-        <div className="scrollbar-hide flex items-center gap-0 overflow-x-auto" id="progress-map">
-          {steps.map((s, i) => {
-            const status = stepStatuses[i];
-            const isActive = i === currentStepIndex;
-            const isCompleted = status === "completed";
-            const isLast = i === steps.length - 1;
-
-            return (
-              <div key={s.id} className="flex shrink-0 items-center">
-                {/* Node */}
-                <button
-                  onClick={() => isCompleted ? setMapTapped(mapTapped === i ? null : i) : null}
-                  className="relative flex flex-col items-center"
-                  style={{ width: 40 }}
-                >
-                  <div
-                    className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold transition-all ${
-                      isCompleted
-                        ? "border-transparent text-white"
-                        : isActive
-                        ? "animate-node-pulse border-transparent text-white"
-                        : "border-white/10 bg-transparent text-gray-600"
-                    }`}
-                    style={{
-                      backgroundColor: isCompleted || isActive ? teamColor : "transparent",
-                      ["--pulse-color" as string]: teamColor + "60",
-                    }}
-                  >
-                    {isCompleted ? (
-                      <Check className="h-3.5 w-3.5" />
-                    ) : isLast ? (
-                      <Gem className="h-3.5 w-3.5" />
-                    ) : isActive ? (
-                      <span>{i + 1}</span>
-                    ) : (
-                      <Lock className="h-3 w-3" />
-                    )}
-                  </div>
-                  {/* Tapped tooltip */}
-                  {mapTapped === i && isCompleted && (
-                    <div className="absolute top-10 z-20 w-32 rounded-lg bg-surface border border-white/10 p-2 text-center shadow-lg">
-                      <p className="text-[10px] text-gray-400">Chapter {i + 1}</p>
-                      <p className="text-[10px] text-green-400">Completed</p>
-                    </div>
-                  )}
-                </button>
-
-                {/* Connector line (not after last) */}
-                {!isLast && (
-                  <div
-                    className={`h-0.5 w-4 shrink-0 ${
-                      isCompleted ? "" : "border-t border-dashed border-white/15"
-                    }`}
-                    style={{ backgroundColor: isCompleted ? teamColor : "transparent" }}
-                  />
-                )}
-              </div>
-            );
-          })}
+          <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${((currentStepIndex) / steps.length) * 100}%` }} />
         </div>
       </div>
 
       <div className="flex-1 space-y-4 px-4 pt-4">
-        {/* ── Narrative card with accent border ── */}
+        {/* Narrative */}
         <div className="rounded-2xl border border-white/5 bg-surface p-5" style={{ borderLeftWidth: 3, borderLeftColor: teamColor }}>
-          <span className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
-            Revelation
-          </span>
-          <p className="text-sm italic leading-relaxed text-gray-300">
-            {step.text_narratif || "Explore your surroundings and seek the next artifact..."}
-          </p>
+          <span className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Revelation</span>
+          <p className="text-sm italic leading-relaxed text-gray-300">{step.text_narratif || "Explore your surroundings..."}</p>
         </div>
 
-        {/* ── Photo hint thumbnail ── */}
+        {/* Photo indice */}
         {step.photo_indice_url && (
           <>
-            <button
-              onClick={() => setPhotoExpanded(true)}
-              className="w-full overflow-hidden rounded-2xl border border-white/5"
-            >
+            <button onClick={() => setPhotoExpanded(true)} className="w-full overflow-hidden rounded-2xl border border-white/5">
               <img src={step.photo_indice_url} alt="Clue" className="h-40 w-full object-cover" />
             </button>
             {photoExpanded && (
@@ -424,112 +225,68 @@ export default function PlayPage() {
           </>
         )}
 
-        {/* ── Hint display ── */}
+        {/* Hint */}
         {hintData && (
           <Card className="border-amber/20 bg-amber/5">
             <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.2em] text-amber">Hint</span>
             {hintData.text && <p className="text-sm text-amber/90">{hintData.text}</p>}
-            {hintData.photoUrl && (
-              <img src={hintData.photoUrl} alt="Hint" className="mt-2 w-full rounded-lg object-cover" style={{ maxHeight: 150 }} />
-            )}
+            {hintData.photoUrl && <img src={hintData.photoUrl} alt="Hint" className="mt-2 w-full rounded-lg object-cover" style={{ maxHeight: 150 }} />}
           </Card>
         )}
 
-        {/* ── Enigma card ── */}
+        {/* Enigma */}
         <Card className={`bg-surface ${shaking ? "animate-shake" : ""}`}>
           <div className="mb-3 flex items-center gap-2 text-primary">
             <MapPin className="h-4 w-4" />
-            <span className="text-[10px] font-semibold uppercase tracking-[0.2em]">
-              {step.type === "epreuve" ? "Challenge" : "Riddle"}
-            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.2em]">{step.type === "epreuve" ? "Challenge" : "Riddle"}</span>
           </div>
 
-          {step.enigme && !step.enigme.includes("|") && (
-            <p className="mb-4 font-medium text-white">{step.enigme}</p>
-          )}
+          {step.enigme && !step.enigme.includes("|") && <p className="mb-4 font-medium text-white">{step.enigme}</p>}
 
-          {/* Text input */}
           {enigmaType === "text" && (
             <div className="flex gap-2">
-              <input
-                type="text"
-                value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
-                placeholder="Your answer..."
+              <input type="text" value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Your answer..."
                 className="flex-1 rounded-xl border border-white/10 bg-deep px-4 py-3 text-white placeholder-gray-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                onKeyDown={(e) => e.key === "Enter" && handleSubmitAnswer()}
-              />
-              <Button onClick={handleSubmitAnswer} disabled={!answer.trim() || submitting} className="px-4">
-                <Send className="h-4 w-4" />
-              </Button>
+                onKeyDown={(e) => e.key === "Enter" && handleSubmitAnswer()} />
+              <Button onClick={handleSubmitAnswer} disabled={!answer.trim() || submitting} className="px-4"><Send className="h-4 w-4" /></Button>
             </div>
           )}
 
-          {/* Code input */}
           {enigmaType === "code" && (
             <div className="flex gap-2">
-              <input
-                type="number"
-                inputMode="numeric"
-                value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
-                placeholder="0000"
-                maxLength={6}
+              <input type="number" inputMode="numeric" value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="0000"
                 className="flex-1 rounded-xl border border-white/10 bg-deep px-4 py-3 text-center font-mono text-xl tracking-[0.3em] text-white placeholder-gray-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                onKeyDown={(e) => e.key === "Enter" && handleSubmitAnswer()}
-              />
-              <Button onClick={handleSubmitAnswer} disabled={!answer.trim() || submitting} className="px-4">
-                <Send className="h-4 w-4" />
-              </Button>
+                onKeyDown={(e) => e.key === "Enter" && handleSubmitAnswer()} />
+              <Button onClick={handleSubmitAnswer} disabled={!answer.trim() || submitting} className="px-4"><Send className="h-4 w-4" /></Button>
             </div>
           )}
 
-          {/* QCM */}
           {enigmaType === "qcm" && (() => {
             const { question, choices } = parseQCMChoices(step.enigme!);
-            return (
-              <>
-                <p className="mb-4 font-medium text-white">{question}</p>
-                <div className="space-y-2">
-                  {choices.map((choice, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setAnswer(choice)}
-                      disabled={submitting}
-                      className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition-all ${
-                        answer === choice
-                          ? "border-primary bg-primary/15 text-white"
-                          : "border-white/10 bg-deep text-gray-300 hover:border-white/20"
-                      }`}
-                    >
-                      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
-                        answer === choice ? "bg-primary text-white" : "bg-white/5 text-gray-500"
-                      }`}>
-                        {QCM_LETTERS[i]}
-                      </span>
-                      {choice}
-                    </button>
-                  ))}
-                </div>
-                {answer && (
-                  <Button onClick={handleSubmitAnswer} disabled={submitting} className="mt-3 w-full">Submit</Button>
-                )}
-              </>
-            );
+            return (<>
+              <p className="mb-4 font-medium text-white">{question}</p>
+              <div className="space-y-2">
+                {choices.map((c, i) => (
+                  <button key={i} onClick={() => setAnswer(c)} disabled={submitting}
+                    className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition-all ${answer === c ? "border-primary bg-primary/15 text-white" : "border-white/10 bg-deep text-gray-300 hover:border-white/20"}`}>
+                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${answer === c ? "bg-primary text-white" : "bg-white/5 text-gray-500"}`}>{QCM_LETTERS[i]}</span>
+                    {c}
+                  </button>
+                ))}
+              </div>
+              {answer && <Button onClick={handleSubmitAnswer} disabled={submitting} className="mt-3 w-full">Submit</Button>}
+            </>);
           })()}
 
-          {/* Photo upload */}
           {enigmaType === "photo" && (
-            <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed border-white/10 bg-deep p-6 transition hover:border-white/20">
+            <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed border-white/10 bg-deep p-6 hover:border-white/20">
               <ImageIcon className="h-8 w-8 text-gray-500" />
-              <span className="text-sm text-gray-400">Capture evidence to submit</span>
+              <span className="text-sm text-gray-400">Capture evidence</span>
               <input type="file" accept="image/*" capture="environment" className="hidden"
-                onChange={() => setFeedback({ type: "info", message: "Photo submitted! A Guardian will verify." })}
-              />
+                onChange={() => setFeedback({ type: "info", msg: "Photo submitted! A Guardian will verify." })} />
             </label>
           )}
 
-          {/* Staff validation */}
           {enigmaType === "staff" && (
             <div className="animate-guardian-pulse rounded-xl border border-primary/30 bg-primary/5 p-5 text-center">
               <ShieldCheck className="mx-auto mb-2 h-8 w-8 text-primary" />
@@ -541,74 +298,25 @@ export default function PlayPage() {
 
         {/* Feedback */}
         {feedback && (
-          <div className={`rounded-xl px-4 py-3 text-sm font-medium ${
-            feedback.type === "success" ? "bg-green-500/10 text-green-400"
-            : feedback.type === "error" ? "bg-red-500/10 text-red-400"
-            : "bg-blue-500/10 text-blue-400"
-          }`}>
-            {feedback.message}
+          <div className={`rounded-xl px-4 py-3 text-sm font-medium ${feedback.type === "error" ? "bg-red-500/10 text-red-400" : "bg-blue-500/10 text-blue-400"}`}>
+            {feedback.msg}
           </div>
         )}
       </div>
 
-      {/* ── Journal overlay ── */}
-      {showJournal && (
-        <div className="fixed inset-0 z-50 bg-deep/95 backdrop-blur-md">
-          <div className="flex h-full flex-col px-6 pt-8 pb-24">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-lg font-bold"><BookOpen className="h-5 w-5 text-primary" /> Journal</h2>
-              <button onClick={() => setShowJournal(false)}><X className="h-5 w-5 text-gray-400" /></button>
-            </div>
-            <div className="flex-1 space-y-3 overflow-y-auto">
-              {completedSteps.length === 0 && (
-                <p className="text-center text-sm text-gray-500">No chapters completed yet.</p>
-              )}
-              {completedSteps.map((s, i) => (
-                <Card key={s.id} className="bg-surface">
-                  <div className="mb-1 flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-green-400" />
-                    <span className="text-xs font-semibold text-gray-400">Chapter {steps.indexOf(s) + 1}</span>
-                  </div>
-                  <p className="text-sm text-gray-300">{s.text_narratif?.slice(0, 120)}...</p>
-                </Card>
-              ))}
-            </div>
-          </div>
+      {/* Bottom actions */}
+      <div className="px-4 pt-2">
+        <div className="flex gap-3">
+          <button onClick={handleHint} disabled={hintLoading}
+            className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-surface px-4 py-3 text-xs text-gray-400 transition hover:text-amber disabled:opacity-50">
+            <Lightbulb className="h-4 w-4" />
+            Hint <span className="text-amber/70">-15</span>
+          </button>
+          <Button onClick={() => router.push("/scan")} className="flex flex-1 items-center justify-center gap-2">
+            <QrCode className="h-5 w-5" /> Decipher the Sigil
+          </Button>
         </div>
-      )}
-
-      {/* ── Rank overlay ── */}
-      {showRank && (
-        <div className="fixed inset-0 z-50 bg-deep/95 backdrop-blur-md">
-          <div className="flex h-full flex-col px-6 pt-8 pb-24">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-lg font-bold"><Trophy className="h-5 w-5 text-amber" /> Live Rankings</h2>
-              <button onClick={() => setShowRank(false)}><X className="h-5 w-5 text-gray-400" /></button>
-            </div>
-            <div className="flex-1 space-y-3 overflow-y-auto">
-              {rankTeams.map((t, i) => (
-                <Card key={i} className="bg-surface">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg font-bold text-amber">#{i + 1}</span>
-                      <span>{t.character}</span>
-                      <span className="font-medium">{t.name}</span>
-                    </div>
-                    <span className="font-bold text-amber">{t.score} RP</span>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Bottom Nav ── */}
-      <BottomNav
-        onHint={handleHint}
-        onJournal={() => setShowJournal(true)}
-        onRank={loadRankings}
-      />
+      </div>
     </main>
   );
 }

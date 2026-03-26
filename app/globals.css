@@ -100,3 +100,15 @@ main {
   animation: score-pop 0.5s ease-out 0.4s forwards;
   opacity: 0;
 }
+
+/* Particle fall — used by /celebrate with dynamic inline styles */
+@keyframes particle-fall {
+  0% { transform: translateY(-20px) rotate(0deg); opacity: 0.8; }
+  100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+}
+
+/* Path draw animation for map */
+@keyframes draw-path {
+  from { stroke-dashoffset: 1000; }
+  to { stroke-dashoffset: 0; }
+}

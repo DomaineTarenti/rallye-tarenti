@@ -22,6 +22,8 @@ interface PlayerState {
   progress: TeamProgress[];
   currentStepIndex: number;
   score: number;
+  currentStepScore: number;
+  stepStartTime: number;
 
   setHasHydrated: (v: boolean) => void;
   setSession: (session: Session | null) => void;
@@ -33,6 +35,8 @@ interface PlayerState {
   setProgress: (progress: TeamProgress[]) => void;
   setCurrentStepIndex: (index: number) => void;
   setScore: (score: number) => void;
+  setCurrentStepScore: (s: number) => void;
+  setStepStartTime: (t: number) => void;
   advanceStep: () => void;
   reset: () => void;
 }
@@ -50,6 +54,8 @@ export const usePlayerStore = create<PlayerState>()(
       progress: [],
       currentStepIndex: 0,
       score: 1000,
+      currentStepScore: 0,
+      stepStartTime: 0,
 
       setHasHydrated: (v) => set({ _hasHydrated: v }),
       setSession: (session) => set({ session }),
@@ -61,15 +67,26 @@ export const usePlayerStore = create<PlayerState>()(
       setProgress: (progress) => set({ progress }),
       setCurrentStepIndex: (index) => {
         const { steps } = get();
-        set({ currentStepIndex: index, currentStep: steps[index] ?? null });
+        set({
+          currentStepIndex: index,
+          currentStep: steps[index] ?? null,
+          stepStartTime: Date.now(),
+        });
       },
       setScore: (score) => set({ score }),
+      setCurrentStepScore: (s) => set({ currentStepScore: s }),
+      setStepStartTime: (t) => set({ stepStartTime: t }),
 
       advanceStep: () => {
         const { currentStepIndex, steps } = get();
         const next = currentStepIndex + 1;
         if (next < steps.length) {
-          set({ currentStepIndex: next, currentStep: steps[next] });
+          set({
+            currentStepIndex: next,
+            currentStep: steps[next],
+            stepStartTime: Date.now(),
+            currentStepScore: 0,
+          });
         }
       },
 
@@ -84,6 +101,8 @@ export const usePlayerStore = create<PlayerState>()(
           progress: [],
           currentStepIndex: 0,
           score: 1000,
+          currentStepScore: 0,
+          stepStartTime: 0,
         }),
     }),
     {
@@ -97,7 +116,7 @@ export const usePlayerStore = create<PlayerState>()(
               removeItem: () => {},
             }
       ),
-      version: 1,
+      version: 2,
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
       },
