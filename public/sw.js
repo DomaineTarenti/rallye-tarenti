@@ -1,18 +1,11 @@
-const CACHE_NAME = "quest-v1";
-const STATIC_ASSETS = [
-  "/",
-  "/manifest.json",
-];
+const CACHE_NAME = "quest-v2";
 
-// Install — cache static assets
+// Install — skip waiting to activate immediately
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
-  );
   self.skipWaiting();
 });
 
-// Activate — clean old caches
+// Activate — delete all old caches
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -24,18 +17,23 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Fetch — cache-first for images, network-first for data
+// Fetch
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET requests
+  // Skip non-GET
   if (request.method !== "GET") return;
 
-  // Cache-first for images
+  // Skip Chrome extensions and non-http
+  if (!url.protocol.startsWith("http")) return;
+
+  // Cache-first for static assets (images, fonts, JS/CSS chunks)
   if (
     request.destination === "image" ||
-    url.pathname.match(/\.(png|jpg|jpeg|svg|webp|gif|ico)$/)
+    request.destination === "font" ||
+    url.pathname.match(/\/_next\/static\//) ||
+    url.pathname.match(/\.(png|jpg|jpeg|svg|webp|gif|ico|woff2?)$/)
   ) {
     event.respondWith(
       caches.match(request).then(
@@ -53,33 +51,20 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Network-first for API/data
-  if (url.pathname.startsWith("/api/")) {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        })
-        .catch(() => caches.match(request).then((r) => r || new Response("{}", { status: 503 })))
-    );
-    return;
-  }
-
-  // Stale-while-revalidate for pages/assets
+  // Network-first for everything else (pages, API, etc.)
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const fetchPromise = fetch(request).then((response) => {
-        if (response.ok) {
+    fetch(request)
+      .then((response) => {
+        if (response.ok && !url.pathname.startsWith("/api/")) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
         }
         return response;
-      });
-      return cached || fetchPromise;
-    })
+      })
+      .catch(() =>
+        caches.match(request).then((cached) =>
+          cached || new Response("Offline", { status: 503 })
+        )
+      )
   );
 });
