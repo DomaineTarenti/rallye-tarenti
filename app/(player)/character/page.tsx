@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Check, ChevronLeft, Sparkles } from "lucide-react";
+import { Camera, Check, ChevronLeft, Sparkles, Copy, AlertTriangle } from "lucide-react";
 import { Button, Card, Input } from "@/components/shared";
 import { usePlayerStore } from "@/lib/store";
 import type { ApiResponse, TeamCharacter } from "@/lib/types";
@@ -52,6 +52,8 @@ export default function CharacterPage() {
   const [error, setError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [teamCode, setTeamCode] = useState("");
+  const [codeNoted, setCodeNoted] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   const sessionId = session?.id;
 
@@ -64,8 +66,13 @@ export default function CharacterPage() {
 
   function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
-    setPhotoPreview(URL.createObjectURL(file));
+    if (file) setPhotoPreview(URL.createObjectURL(file));
+  }
+
+  function copyCode() {
+    navigator.clipboard.writeText(teamCode);
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 2000);
   }
 
   async function handleSubmit() {
@@ -119,18 +126,19 @@ export default function CharacterPage() {
     }
   }
 
-  // ── Confirmation screen ──
+  // ── Confirmation screen with recovery code ──
   if (confirmed) {
     return (
       <main className="flex min-h-[100dvh] flex-col items-center justify-center px-6 pb-6">
-        <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
           <Check className="h-8 w-8 text-green-400" />
         </div>
 
         <h1 className="mb-1 text-2xl font-bold">Fellowship Forged!</h1>
-        <p className="mb-8 text-gray-400">Your legacy begins now</p>
+        <p className="mb-6 text-gray-400">Your legacy begins now</p>
 
-        <Card className="mb-6 w-full max-w-xs bg-surface text-center">
+        {/* Badge */}
+        <Card className="mb-4 w-full max-w-xs bg-surface text-center">
           <div
             className="mx-auto mb-3 flex h-20 w-20 items-center justify-center rounded-2xl text-4xl"
             style={{ backgroundColor: selectedColor?.hex + "25" }}
@@ -140,21 +148,63 @@ export default function CharacterPage() {
           <p className="text-xl font-bold" style={{ color: selectedColor?.hex }}>
             {teamName}
           </p>
-          <p className="mt-1 font-mono text-sm text-gray-400">{teamCode}</p>
           {warCry && (
             <p className="mt-2 text-sm italic text-gray-500">&ldquo;{warCry}&rdquo;</p>
           )}
         </Card>
 
-        <Card className="mb-8 w-full max-w-xs bg-surface text-center">
-          <p className="mb-1 text-xs uppercase tracking-wider text-gray-500">Fellowship Code</p>
-          <p className="font-mono text-3xl font-bold tracking-widest" style={{ color: selectedColor?.hex }}>
+        {/* Recovery code — BIG + prominent */}
+        <div
+          className="mb-4 w-full max-w-xs rounded-2xl border-4 p-6 text-center"
+          style={{ borderColor: selectedColor?.hex, backgroundColor: selectedColor?.hex + "10" }}
+        >
+          <p className="mb-2 text-xs uppercase tracking-wider text-gray-400">Your Fellowship Code</p>
+          <p
+            className="font-mono text-5xl font-black tracking-[0.2em]"
+            style={{ color: selectedColor?.hex }}
+          >
             {teamCode}
           </p>
-          <p className="mt-2 text-xs text-gray-500">Share with Guardians when needed</p>
-        </Card>
+          <button
+            onClick={copyCode}
+            className="mt-3 flex items-center justify-center gap-1.5 mx-auto rounded-lg px-4 py-2 text-sm font-medium transition"
+            style={{ backgroundColor: selectedColor?.hex + "20", color: selectedColor?.hex }}
+          >
+            {codeCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            {codeCopied ? "Copied!" : "Copy code"}
+          </button>
+        </div>
 
-        <Button onClick={() => router.push("/play")} size="lg" className="w-full max-w-xs">
+        {/* Warning */}
+        <div className="mb-6 w-full max-w-xs rounded-xl bg-amber/10 p-4">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
+            <div className="text-xs text-amber/90">
+              <p className="font-bold">Note this code — it is your key!</p>
+              <p className="mt-1 text-amber/70">
+                If you switch phones or close the app, enter this code on the-quest.vercel.app to resume your journey.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Checkbox */}
+        <label className="mb-6 flex w-full max-w-xs cursor-pointer items-center gap-3 rounded-xl bg-surface p-3">
+          <input
+            type="checkbox"
+            checked={codeNoted}
+            onChange={(e) => setCodeNoted(e.target.checked)}
+            className="h-5 w-5 rounded accent-primary"
+          />
+          <span className="text-sm text-gray-300">I have noted my code</span>
+        </label>
+
+        <Button
+          onClick={() => router.push("/play")}
+          size="lg"
+          className="w-full max-w-xs"
+          disabled={!codeNoted}
+        >
           <Sparkles className="mr-2 inline h-5 w-5" />
           Begin the Quest
         </Button>
@@ -175,108 +225,61 @@ export default function CharacterPage() {
       <h1 className="mb-1 text-2xl font-bold">Forge Your Legacy</h1>
       <p className="mb-8 text-sm text-gray-400">Choose wisely, these marks are eternal</p>
 
-      {/* Live badge preview */}
       <Card className="mb-8 bg-surface text-center">
         <div
           className="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-2xl text-3xl transition-all"
-          style={{
-            backgroundColor: selectedColor ? selectedColor.hex + "25" : "rgba(255,255,255,0.05)",
-          }}
+          style={{ backgroundColor: selectedColor ? selectedColor.hex + "25" : "rgba(255,255,255,0.05)" }}
         >
           {selectedAnimal ? selectedAnimal.emoji : "?"}
         </div>
         <p className="font-bold transition-all" style={{ color: selectedColor?.hex ?? "#6B7280" }}>
           {teamName || "Fellowship Name"}
         </p>
-        {warCry && (
-          <p className="mt-1 text-xs italic text-gray-500">&ldquo;{warCry}&rdquo;</p>
-        )}
+        {warCry && <p className="mt-1 text-xs italic text-gray-500">&ldquo;{warCry}&rdquo;</p>}
       </Card>
 
-      {/* Fellowship Name */}
       <div className="mb-6">
-        <Input
-          label="Fellowship Name *"
-          value={teamName}
-          onChange={(e) => setTeamName(e.target.value)}
-          placeholder="The Unbroken Circle"
-          maxLength={30}
-          className="bg-surface"
-        />
+        <Input label="Fellowship Name *" value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="The Unbroken Circle" maxLength={30} className="bg-surface" />
       </div>
 
-      {/* Animal Totem grid 2x4 */}
       <div className="mb-6">
         <label className="mb-2 block text-sm font-medium text-gray-400">Animal Totem *</label>
         <div className="grid grid-cols-4 gap-3">
-          {ANIMALS.map((animal) => (
-            <button
-              key={animal.id}
-              onClick={() => setSelectedAnimal(animal)}
-              className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 transition-all ${
-                selectedAnimal?.id === animal.id
-                  ? "border-primary bg-primary/10 scale-105"
-                  : "border-white/10 bg-surface hover:border-white/20"
-              }`}
-            >
-              <span className="text-2xl">{animal.emoji}</span>
-              <span className="text-[10px] text-gray-400">{animal.name}</span>
+          {ANIMALS.map((a) => (
+            <button key={a.id} onClick={() => setSelectedAnimal(a)} className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 transition-all ${selectedAnimal?.id === a.id ? "border-primary bg-primary/10 scale-105" : "border-white/10 bg-surface hover:border-white/20"}`}>
+              <span className="text-2xl">{a.emoji}</span>
+              <span className="text-[10px] text-gray-400">{a.name}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Astral Hue */}
       <div className="mb-6">
         <label className="mb-2 block text-sm font-medium text-gray-400">Astral Hue *</label>
         <div className="flex justify-center gap-3">
-          {ASTRAL_HUES.map((color) => (
-            <button
-              key={color.hex}
-              onClick={() => setSelectedColor(color)}
-              className={`h-10 w-10 rounded-full border-2 transition-all ${
-                selectedColor?.hex === color.hex
-                  ? "scale-125 border-white shadow-lg"
-                  : "border-transparent hover:scale-110"
-              }`}
-              style={{ backgroundColor: color.hex }}
-              title={color.name}
-            />
+          {ASTRAL_HUES.map((c) => (
+            <button key={c.hex} onClick={() => setSelectedColor(c)} className={`h-10 w-10 rounded-full border-2 transition-all ${selectedColor?.hex === c.hex ? "scale-125 border-white shadow-lg" : "border-transparent hover:scale-110"}`} style={{ backgroundColor: c.hex }} title={c.name} />
           ))}
         </div>
       </div>
 
-      {/* Echo of Valour */}
       <div className="mb-6">
-        <Input
-          label="Echo of Valour (optional)"
-          value={warCry}
-          onChange={(e) => setWarCry(e.target.value)}
-          placeholder="Through fire we rise!"
-          maxLength={50}
-          className="bg-surface"
-        />
+        <Input label="Echo of Valour (optional)" value={warCry} onChange={(e) => setWarCry(e.target.value)} placeholder="Through fire we rise!" maxLength={50} className="bg-surface" />
       </div>
 
-      {/* Fellowship Portrait */}
       <div className="mb-8">
         <label className="mb-2 block text-sm font-medium text-gray-400">Fellowship Portrait (optional)</label>
         <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed border-white/10 bg-surface p-4 transition hover:border-white/20">
           {photoPreview ? (
-            <img src={photoPreview} alt="Fellowship Portrait" className="h-32 w-full rounded-lg object-cover" />
+            <img src={photoPreview} alt="Portrait" className="h-32 w-full rounded-lg object-cover" />
           ) : (
-            <>
-              <Camera className="h-8 w-8 text-gray-500" />
-              <span className="text-sm text-gray-500">Capture your fellowship</span>
-            </>
+            <><Camera className="h-8 w-8 text-gray-500" /><span className="text-sm text-gray-500">Capture your fellowship</span></>
           )}
           <input type="file" accept="image/*" capture="environment" onChange={handlePhoto} className="hidden" />
         </label>
       </div>
 
-      {error && (
-        <div className="mb-4 rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-400">{error}</div>
-      )}
+      {error && <div className="mb-4 rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-400">{error}</div>}
 
       <Button onClick={handleSubmit} size="lg" className="w-full" disabled={!canSubmit || loading}>
         {loading ? "Forging..." : "Seal the Pact"}

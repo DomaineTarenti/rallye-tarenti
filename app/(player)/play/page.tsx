@@ -12,6 +12,9 @@ import {
   X,
   CheckCircle2,
   BookOpen,
+  Lock,
+  Check,
+  Gem,
 } from "lucide-react";
 import { Button, Card, Loader, BottomNav } from "@/components/shared";
 import { usePlayerStore } from "@/lib/store";
@@ -66,6 +69,17 @@ export default function PlayPage() {
 
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
+
+  // Auto-scroll progress map to center active step
+  useEffect(() => {
+    if (!hydrated) return;
+    const el = document.getElementById("progress-map");
+    if (el) {
+      const nodeWidth = 44; // 40px node + 4px gap
+      const scrollTo = currentStepIndex * nodeWidth - el.clientWidth / 2 + nodeWidth / 2;
+      el.scrollTo({ left: Math.max(0, scrollTo), behavior: "smooth" });
+    }
+  }, [hydrated, currentStepIndex]);
 
   const loadGameState = useCallback(async () => {
     if (!team || !session) return;
@@ -246,9 +260,17 @@ export default function PlayPage() {
     return p?.status === "completed";
   });
 
+  // Step statuses for the map
+  const stepStatuses = steps.map((s) => {
+    const p = progress.find((pr) => pr.step_id === s.id);
+    return p?.status ?? "locked";
+  });
+
+  const [mapTapped, setMapTapped] = useState<number | null>(null);
+
   return (
     <main className="flex min-h-[100dvh] flex-col pb-20">
-      {/* ── Header ── */}
+      {/* ── Header with team code ── */}
       <div className="sticky top-0 z-10 border-b border-white/5 bg-deep/95 px-4 py-3 backdrop-blur-md">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -258,21 +280,89 @@ export default function PlayPage() {
             >
               {initials}
             </div>
-            <span className="text-sm font-semibold">
-              Chapter {currentStepIndex + 1} of {steps.length}
-            </span>
+            <div>
+              <span className="text-sm font-semibold">
+                Chapter {currentStepIndex + 1} of {steps.length}
+              </span>
+              {teamCharacter?.teamCode && (
+                <p className="font-mono text-[10px] text-gray-500">{teamCharacter.teamCode}</p>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-1.5 text-amber">
             <Hexagon className="h-4 w-4" />
             <span className="text-sm font-bold">{score} RP</span>
           </div>
         </div>
-        {/* Progress bar */}
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/5">
           <div
             className="h-full rounded-full bg-primary transition-all duration-700"
             style={{ width: `${((currentStepIndex + 1) / steps.length) * 100}%` }}
           />
+        </div>
+      </div>
+
+      {/* ── Progress Map — "The Treasure Path" ── */}
+      <div className="border-b border-white/5 bg-surface/50 px-2 py-3">
+        <div className="scrollbar-hide flex items-center gap-0 overflow-x-auto" id="progress-map">
+          {steps.map((s, i) => {
+            const status = stepStatuses[i];
+            const isActive = i === currentStepIndex;
+            const isCompleted = status === "completed";
+            const isLast = i === steps.length - 1;
+
+            return (
+              <div key={s.id} className="flex shrink-0 items-center">
+                {/* Node */}
+                <button
+                  onClick={() => isCompleted ? setMapTapped(mapTapped === i ? null : i) : null}
+                  className="relative flex flex-col items-center"
+                  style={{ width: 40 }}
+                >
+                  <div
+                    className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold transition-all ${
+                      isCompleted
+                        ? "border-transparent text-white"
+                        : isActive
+                        ? "animate-node-pulse border-transparent text-white"
+                        : "border-white/10 bg-transparent text-gray-600"
+                    }`}
+                    style={{
+                      backgroundColor: isCompleted || isActive ? teamColor : "transparent",
+                      ["--pulse-color" as string]: teamColor + "60",
+                    }}
+                  >
+                    {isCompleted ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : isLast ? (
+                      <Gem className="h-3.5 w-3.5" />
+                    ) : isActive ? (
+                      <span>{i + 1}</span>
+                    ) : (
+                      <Lock className="h-3 w-3" />
+                    )}
+                  </div>
+                  {/* Tapped tooltip */}
+                  {mapTapped === i && isCompleted && (
+                    <div className="absolute top-10 z-20 w-32 rounded-lg bg-surface border border-white/10 p-2 text-center shadow-lg">
+                      <p className="text-[10px] text-gray-400">Chapter {i + 1}</p>
+                      <p className="text-[10px] text-green-400">Completed</p>
+                    </div>
+                  )}
+                </button>
+
+                {/* Connector line (not after last) */}
+                {!isLast && (
+                  <div
+                    className={`h-0.5 w-4 shrink-0 ${
+                      isCompleted ? "" : "border-t border-dashed border-white/15"
+                    }`}
+                    style={{ backgroundColor: isCompleted ? teamColor : "transparent" }}
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 

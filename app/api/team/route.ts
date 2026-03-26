@@ -2,6 +2,80 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import type { ApiResponse } from "@/lib/types";
 
+// GET /api/team?code=LIO42&session_id=xxx — recover team by fellowship code
+export async function GET(req: NextRequest) {
+  const teamCode = req.nextUrl.searchParams.get("code");
+  const sessionId = req.nextUrl.searchParams.get("session_id");
+
+  if (!teamCode || !sessionId) {
+    return NextResponse.json<ApiResponse>(
+      { data: null, error: "code and session_id required" },
+      { status: 400 }
+    );
+  }
+
+  const supabase = createServerClient();
+
+  // Search for team by code embedded in character JSON
+  const { data: teams } = await supabase
+    .from("teams")
+    .select("*")
+    .eq("session_id", sessionId)
+    .like("character", `%"teamCode":"${teamCode.toUpperCase()}"%`);
+
+  const team = teams?.[0];
+
+  if (!team) {
+    return NextResponse.json<ApiResponse>(
+      { data: null, error: "Fellowship not found. Check your code." },
+      { status: 404 }
+    );
+  }
+
+  if (team.locked) {
+    return NextResponse.json<ApiResponse>(
+      { data: null, error: "This fellowship has already completed their journey." },
+      { status: 403 }
+    );
+  }
+
+  // Load game state
+  const { data: objects } = await supabase
+    .from("objects")
+    .select("*")
+    .eq("session_id", sessionId)
+    .order("order");
+
+  const objectIds = (objects ?? []).map((o) => o.id);
+  let steps: Array<Record<string, unknown>> = [];
+  if (objectIds.length > 0) {
+    const { data } = await supabase
+      .from("steps")
+      .select("*")
+      .in("object_id", objectIds)
+      .order("order");
+    steps = data ?? [];
+  }
+
+  const objectOrderMap = new Map((objects ?? []).map((o) => [o.id, o.order]));
+  steps.sort((a, b) => {
+    const oa = objectOrderMap.get(a.object_id as string) ?? 0;
+    const ob = objectOrderMap.get(b.object_id as string) ?? 0;
+    if (oa !== ob) return oa - ob;
+    return ((a.order as number) ?? 0) - ((b.order as number) ?? 0);
+  });
+
+  const { data: progressData } = await supabase
+    .from("team_progress")
+    .select("*")
+    .eq("team_id", team.id);
+
+  return NextResponse.json<ApiResponse>({
+    data: { team, objects: objects ?? [], steps, progress: progressData ?? [] },
+    error: null,
+  });
+}
+
 // POST /api/team — create a team + initialize progress
 export async function POST(req: NextRequest) {
   const { session_id, name, character } = await req.json();
