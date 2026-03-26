@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-primary: #7F77DD;
+  --color-primary-light: #A59BE8;
+  --color-primary-dark: #5B53B0;
+  --color-amber: #EF9F27;
+  --color-surface: #1a1a2e;
+  --color-deep: #0d0d1a;
+}
+
+body {
+  background-color: var(--color-deep);
+  @apply text-white antialiased;
+  min-height: 100dvh;
+}
+
+main {
+  @apply min-h-[100dvh];
+}
+
+/* PWA safe area */
+@supports (padding-top: env(safe-area-inset-top)) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Scan corner pulse */
+@keyframes corner-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+.animate-corner-pulse {
+  animation: corner-pulse 2s ease-in-out infinite;
+}
+
+/* Shake animation for wrong answers */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
+}
+
+/* Guardian pulse */
+@keyframes guardian-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(127, 119, 221, 0.4); }
+  50% { box-shadow: 0 0 0 12px rgba(127, 119, 221, 0); }
+}
+.animate-guardian-pulse {
+  animation: guardian-pulse 2s ease-in-out infinite;
+}
