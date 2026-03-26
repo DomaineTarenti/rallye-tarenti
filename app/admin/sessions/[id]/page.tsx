@@ -668,16 +668,24 @@ export default function ConfigureSessionPage() {
                             if (!obj.id) return;
                             if (!navigator.geolocation) { alert("GPS not available"); return; }
                             navigator.geolocation.getCurrentPosition(async (pos) => {
-                              await fetch("/api/objects", {
+                              const lat = pos.coords.latitude;
+                              const lng = pos.coords.longitude;
+                              console.log("Updating object GPS:", obj.id, obj.name, lat, lng);
+                              const res = await fetch("/api/objects", {
                                 method: "PATCH",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({
                                   id: obj.id,
-                                  latitude: pos.coords.latitude,
-                                  longitude: pos.coords.longitude,
+                                  latitude: lat,
+                                  longitude: lng,
                                 }),
                               });
-                              await loadData();
+                              const json = await res.json();
+                              if (json.error) { alert(json.error); return; }
+                              // Update only this object locally — don't refetch all
+                              setObjects((prev) => prev.map((o) =>
+                                o.id === obj.id ? { ...o, latitude: lat, longitude: lng } : o
+                              ));
                             }, () => alert("GPS permission denied"));
                           }}
                           className="mt-1 text-xs font-medium text-indigo-600 hover:text-indigo-700"

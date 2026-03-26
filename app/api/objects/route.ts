@@ -101,9 +101,19 @@ export async function PATCH(req: NextRequest) {
 
   const supabase = createServerClient();
 
-  // Update object
+  // Update object — filter by exact ID only
   if (Object.keys(objUpdates).length > 0) {
-    await supabase.from("objects").update(objUpdates).eq("id", id);
+    const { error: updateErr } = await supabase
+      .from("objects")
+      .update(objUpdates)
+      .eq("id", id);
+
+    if (updateErr) {
+      return NextResponse.json<ApiResponse>(
+        { data: null, error: updateErr.message },
+        { status: 500 }
+      );
+    }
   }
 
   // Update step
