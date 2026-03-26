@@ -13,6 +13,7 @@ import {
   Pause,
   CheckCircle2,
   FileEdit,
+  Trash2,
 } from "lucide-react";
 import { Loader } from "@/components/shared";
 import type { ApiResponse, Session } from "@/lib/types";
@@ -52,6 +53,16 @@ export default function AdminDashboard() {
     }
     load();
   }, []);
+
+  async function deleteSession(id: string, name: string) {
+    if (!confirm(`Delete "${name}"? This is irreversible. All teams and progress will be deleted.`)) return;
+    try {
+      const res = await fetch(`/api/session?id=${id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (json.error) { alert(json.error); return; }
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+    } catch { /* silent */ }
+  }
 
   const activeSessions = sessions.filter((s) => s.status === "active");
   const totalTeams = sessions.reduce((sum, s) => sum + (s.team_count ?? 0), 0);
@@ -194,6 +205,19 @@ export default function AdminDashboard() {
                         className="rounded-lg bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100"
                       >
                         Live
+                      </span>
+                    )}
+
+                    {session.status !== "active" && (
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteSession(session.id, session.name);
+                        }}
+                        title="Delete session"
+                        className="rounded-lg p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" />
                       </span>
                     )}
 

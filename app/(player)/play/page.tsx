@@ -3,10 +3,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Hexagon, MapPin, Send, ImageIcon, ShieldCheck, Lightbulb, QrCode, X, Trophy,
+  Hexagon, MapPin, Send, ImageIcon, ShieldCheck, Lightbulb, QrCode, X, Trophy, MessageSquare,
 } from "lucide-react";
 import { Button, Card, Loader } from "@/components/shared";
 import { usePlayerStore } from "@/lib/store";
+import { supabase } from "@/lib/supabase";
 import type { ApiResponse, Step, TeamProgress } from "@/lib/types";
 
 function getEnigmaInputType(step: Step): "text" | "code" | "qcm" | "photo" | "staff" {
@@ -52,6 +53,22 @@ export default function PlayPage() {
   const [hintLoading, setHintLoading] = useState(false);
   const [loadingGame, setLoadingGame] = useState(false);
   const [photoExpanded, setPhotoExpanded] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  // Realtime: listen for admin messages
+  useEffect(() => {
+    if (!team) return;
+    const ch = supabase
+      .channel(`msg-${team.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "team_messages", filter: `team_id=eq.${team.id}` },
+        (payload) => {
+          const msg = (payload.new as { message: string }).message;
+          setToast(msg);
+          setTimeout(() => setToast(null), 10000);
+        })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [team]);
 
   const loadGameState = useCallback(async () => {
     if (!team || !session) return;
@@ -184,6 +201,14 @@ export default function PlayPage() {
 
   return (
     <main className="flex min-h-[100dvh] flex-col pb-6">
+      {/* Admin message toast */}
+      {toast && (
+        <div className="fixed left-4 right-4 top-4 z-50 flex items-start gap-3 rounded-xl bg-amber/95 px-4 py-3 shadow-lg" onClick={() => setToast(null)}>
+          <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-deep" />
+          <p className="text-sm font-medium text-deep">{toast}</p>
+          <button className="ml-auto shrink-0 text-deep/60"><X className="h-4 w-4" /></button>
+        </div>
+      )}
       {/* ── Minimal header ── */}
       <div className="sticky top-0 z-10 border-b border-white/5 bg-deep/95 px-4 py-3 backdrop-blur-md">
         <div className="flex items-center justify-between">

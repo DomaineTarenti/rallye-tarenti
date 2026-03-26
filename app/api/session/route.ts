@@ -179,3 +179,24 @@ export async function PATCH(req: NextRequest) {
 
   return NextResponse.json<ApiResponse<Session>>({ data, error: null });
 }
+
+// DELETE /api/session?id=xxx — delete a session (only draft/completed)
+export async function DELETE(req: NextRequest) {
+  const id = req.nextUrl.searchParams.get("id");
+  if (!id) {
+    return NextResponse.json<ApiResponse>({ data: null, error: "id required" }, { status: 400 });
+  }
+  const supabase = createServerClient();
+  const { data: sess } = await supabase.from("sessions").select("status").eq("id", id).single();
+  if (!sess) {
+    return NextResponse.json<ApiResponse>({ data: null, error: "Not found" }, { status: 404 });
+  }
+  if (sess.status === "active") {
+    return NextResponse.json<ApiResponse>({ data: null, error: "Cannot delete an active session. End it first." }, { status: 403 });
+  }
+  const { error: delErr } = await supabase.from("sessions").delete().eq("id", id);
+  if (delErr) {
+    return NextResponse.json<ApiResponse>({ data: null, error: delErr.message }, { status: 500 });
+  }
+  return NextResponse.json<ApiResponse>({ data: { deleted: true }, error: null });
+}
