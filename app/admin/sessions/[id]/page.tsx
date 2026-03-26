@@ -270,40 +270,132 @@ export default function ConfigureSessionPage() {
 
       const doc = new jsPDF("p", "mm", "a4");
       const pageW = 210;
-      const margin = 15;
-      const qrSize = 80;
+      const pageH = 297;
+      const margin = 20;
       const cols = 2;
-      const gap = 10;
+      const rows = 2;
+      const qrSize = 70;
+      const cellW = (pageW - margin * 2) / cols;
+      const headerH = 30;
+      const cellH = (pageH - margin * 2 - headerH) / rows;
 
       const savedObjects = objects.filter((o) => o.id && o.qr_code_id);
+      const totalPages = Math.ceil(savedObjects.length / 4);
 
       for (let i = 0; i < savedObjects.length; i++) {
+        const pageIdx = Math.floor(i / 4);
+        const posOnPage = i % 4;
+        const col = posOnPage % cols;
+        const row = Math.floor(posOnPage / cols);
+
+        if (i > 0 && posOnPage === 0) doc.addPage();
+
+        // ── Page header (once per page) ──
+        if (posOnPage === 0) {
+          // Logo text
+          doc.setFontSize(18);
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(127, 119, 221); // #7F77DD
+          doc.text("THE QUEST", pageW / 2, margin + 5, { align: "center" });
+
+          // Session name
+          doc.setFontSize(10);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(100, 100, 100);
+          doc.text(
+            session?.name ?? "Quest Session",
+            pageW / 2,
+            margin + 12,
+            { align: "center" }
+          );
+
+          // Divider line
+          doc.setDrawColor(127, 119, 221);
+          doc.setLineWidth(0.5);
+          doc.line(margin, margin + 16, pageW - margin, margin + 16);
+
+          // Page number
+          doc.setFontSize(7);
+          doc.setTextColor(180, 180, 180);
+          doc.text(
+            `Page ${pageIdx + 1} / ${totalPages}`,
+            pageW / 2,
+            pageH - 10,
+            { align: "center" }
+          );
+
+          // Footer
+          doc.text(
+            "Print and place each QR code next to its corresponding object",
+            pageW / 2,
+            pageH - 6,
+            { align: "center" }
+          );
+        }
+
         const obj = savedObjects[i];
-        const col = i % cols;
-        const row = Math.floor((i % 4) / cols);
+        const cellX = margin + col * cellW;
+        const cellY = margin + headerH + row * cellH;
 
-        if (i > 0 && i % 4 === 0) doc.addPage();
+        // ── Card border ──
+        doc.setDrawColor(220, 220, 220);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(
+          cellX + 4,
+          cellY + 2,
+          cellW - 8,
+          cellH - 8,
+          3,
+          3,
+          "S"
+        );
 
-        const x = margin + col * (qrSize + gap);
-        const y = margin + row * (qrSize + gap + 15);
-
-        // Generate QR as data URL
-        const qrDataUrl = await QRCode.toDataURL(obj.qr_code_id!, {
-          width: 300,
-          margin: 1,
-        });
-
-        doc.addImage(qrDataUrl, "PNG", x, y, qrSize, qrSize);
-        doc.setFontSize(10);
+        // ── Order badge ──
+        const badgeX = cellX + 10;
+        const badgeY = cellY + 8;
+        doc.setFillColor(127, 119, 221);
+        doc.circle(badgeX, badgeY, 4, "F");
+        doc.setFontSize(8);
         doc.setFont("helvetica", "bold");
-        doc.text(obj.name, x + qrSize / 2, y + qrSize + 5, {
-          align: "center",
+        doc.setTextColor(255, 255, 255);
+        doc.text(String(i + 1), badgeX, badgeY + 1, { align: "center" });
+
+        // ── Object name ──
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(30, 30, 30);
+        const nameX = cellX + cellW / 2;
+        doc.text(obj.name, nameX, cellY + 12, { align: "center" });
+
+        // ── QR code ──
+        const qrDataUrl = await QRCode.toDataURL(obj.qr_code_id!, {
+          width: 400,
+          margin: 1,
+          color: { dark: "#1a1a2e", light: "#ffffff" },
         });
-        doc.setFontSize(7);
+
+        const qrX = cellX + (cellW - qrSize) / 2;
+        const qrY = cellY + 18;
+        doc.addImage(qrDataUrl, "PNG", qrX, qrY, qrSize, qrSize);
+
+        // ── QR code ID (small) ──
+        doc.setFontSize(6);
         doc.setFont("helvetica", "normal");
-        doc.text(obj.qr_code_id!, x + qrSize / 2, y + qrSize + 9, {
+        doc.setTextColor(160, 160, 160);
+        doc.text(obj.qr_code_id!, nameX, qrY + qrSize + 4, {
           align: "center",
         });
+
+        // ── Description (if fits) ──
+        if (obj.description) {
+          doc.setFontSize(7);
+          doc.setTextColor(130, 130, 130);
+          const desc =
+            obj.description.length > 60
+              ? obj.description.slice(0, 57) + "..."
+              : obj.description;
+          doc.text(desc, nameX, qrY + qrSize + 9, { align: "center" });
+        }
       }
 
       doc.save(`${session?.name ?? "quest"}-qr-codes.pdf`);
