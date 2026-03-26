@@ -62,18 +62,15 @@ export default function StepPage() {
   const [shaking, setShaking] = useState(false);
   const [waitingStaff, setWaitingStaff] = useState(false);
 
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => setHydrated(true), []);
-
   const isLastStep = currentStepIndex + 1 >= steps.length;
   const teamColor = teamCharacter?.color ?? "#7F77DD";
 
   useEffect(() => {
-    if (hydrated && currentStep) {
+    if (currentStep) {
       const timer = setTimeout(() => setRevealed(true), 600);
       return () => clearTimeout(timer);
     }
-  }, [hydrated, currentStep]);
+  }, [currentStep]);
 
   // Supabase Realtime for staff validation
   useEffect(() => {
@@ -117,7 +114,6 @@ export default function StepPage() {
     router.push("/play");
   }, [currentStepIndex, steps, isLastStep, setCurrentStepIndex, setCurrentStep, router]);
 
-  if (!hydrated) return null;
   if (!team || !currentStep) { router.push("/play"); return null; }
 
   const step = currentStep;

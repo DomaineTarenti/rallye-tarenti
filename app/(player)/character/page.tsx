@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Check, ChevronLeft, Sparkles, Copy, AlertTriangle } from "lucide-react";
 import { Button, Card, Input } from "@/components/shared";
@@ -54,13 +54,7 @@ export default function CharacterPage() {
   const [teamCode, setTeamCode] = useState("");
   const [codeNoted, setCodeNoted] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => setHydrated(true), []);
-
   const sessionId = session?.id;
-
-  if (!hydrated) return null;
 
   if (!session) {
     router.push("/");

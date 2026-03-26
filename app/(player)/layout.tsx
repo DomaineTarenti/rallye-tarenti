@@ -1,7 +1,7 @@
 "use client";
 
 import { useApplyTheme } from "@/lib/theme";
-import { OfflineBanner } from "@/components/shared";
+import { OfflineBanner, HydrationGuard } from "@/components/shared";
 
 export default function PlayerLayout({
   children,
@@ -12,7 +12,7 @@ export default function PlayerLayout({
   return (
     <>
       <OfflineBanner />
-      {children}
+      <HydrationGuard>{children}</HydrationGuard>
     </>
   );
 }

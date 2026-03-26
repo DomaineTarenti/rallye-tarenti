@@ -67,19 +67,15 @@ export default function PlayPage() {
   const [rankTeams, setRankTeams] = useState<Array<{ name: string; score: number; character: string | null }>>([]);
   const [photoExpanded, setPhotoExpanded] = useState(false);
 
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => setHydrated(true), []);
-
   // Auto-scroll progress map to center active step
   useEffect(() => {
-    if (!hydrated) return;
     const el = document.getElementById("progress-map");
     if (el) {
-      const nodeWidth = 44; // 40px node + 4px gap
+      const nodeWidth = 44;
       const scrollTo = currentStepIndex * nodeWidth - el.clientWidth / 2 + nodeWidth / 2;
       el.scrollTo({ left: Math.max(0, scrollTo), behavior: "smooth" });
     }
-  }, [hydrated, currentStepIndex]);
+  }, [currentStepIndex]);
 
   const loadGameState = useCallback(async () => {
     if (!team || !session) return;
@@ -113,10 +109,9 @@ export default function PlayPage() {
   }, [team, session, setObjects, setSteps, setProgress, setScore, setCurrentStep, setCurrentStepIndex]);
 
   useEffect(() => {
-    if (hydrated && team && session && steps.length === 0) loadGameState();
-  }, [hydrated, team, session, steps.length, loadGameState]);
+    if (team && session && steps.length === 0) loadGameState();
+  }, [team, session, steps.length, loadGameState]);
 
-  if (!hydrated) return null;
   if (!session || !team) { router.push("/"); return null; }
 
   if (loadingGame) {

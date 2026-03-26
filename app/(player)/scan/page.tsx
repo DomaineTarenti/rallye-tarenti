@@ -30,8 +30,8 @@ export default function ScanPage() {
   const scannerRef = useRef<HTMLDivElement>(null);
   const processingRef = useRef(false);
 
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => setHydrated(true), []);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const processScan = useCallback(
     async (qrCodeId: string) => {
@@ -75,15 +75,15 @@ export default function ScanPage() {
 
   // Initialize QR scanner
   useEffect(() => {
-    if (!hydrated || !scannerRef.current || manualMode || scanResult) return;
+    if (!mounted || !scannerRef.current || manualMode || scanResult) return;
 
     let html5QrCode: { stop: () => Promise<void>; start: Function } | null = null;
-    let mounted = true;
+    let alive = true;
 
     async function initScanner() {
       try {
         const { Html5Qrcode } = await import("html5-qrcode");
-        if (!mounted) return;
+        if (!alive) return;
 
         html5QrCode = new Html5Qrcode("qr-reader");
 
@@ -98,9 +98,9 @@ export default function ScanPage() {
           () => {}
         );
 
-        if (mounted) setScanning(true);
+        if (alive) setScanning(true);
       } catch (err) {
-        if (mounted) {
+        if (alive) {
           setCameraError("Cannot access camera. Check permissions or use manual entry.");
           console.error("QR scanner error:", err);
         }
@@ -109,12 +109,12 @@ export default function ScanPage() {
 
     initScanner();
     return () => {
-      mounted = false;
+      alive = false;
       html5QrCode?.stop().catch(() => {});
     };
-  }, [hydrated, manualMode, scanResult, processScan]);
+  }, [mounted, manualMode, scanResult, processScan]);
 
-  if (!hydrated) return null;
+  if (!mounted) return null;
   if (!session || !team) { router.push("/"); return null; }
 
   function handleManualSubmit() {

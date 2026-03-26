@@ -27,7 +27,6 @@ function JoinContent() {
   const [session, setLocalSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hydrated, setHydrated] = useState(false);
 
   // Recovery state
   const [showRecovery, setShowRecovery] = useState(false);
@@ -35,12 +34,7 @@ function JoinContent() {
   const [recovering, setRecovering] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
 
-  // Hydration guard
-  useEffect(() => setHydrated(true), []);
-
   useEffect(() => {
-    if (!hydrated) return;
-
     if (!code) { setError("No Access Key provided."); setLoading(false); return; }
 
     if (storedSession && storedSession.code === code.toUpperCase()) {
@@ -77,7 +71,7 @@ function JoinContent() {
     }
     fetchSession();
     return () => { cancelled = true; };
-  }, [hydrated, code, storedSession, setSession]);
+  }, [code, storedSession, setSession]);
 
   async function handleRecover() {
     if (!recoveryCode.trim() || !session) return;

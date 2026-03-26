@@ -12,6 +12,7 @@ import type {
 
 // ─── Player store ────────────────────────────────────────────────
 interface PlayerState {
+  _hasHydrated: boolean;
   session: Session | null;
   team: Team | null;
   teamCharacter: TeamCharacter | null;
@@ -22,6 +23,7 @@ interface PlayerState {
   currentStepIndex: number;
   score: number;
 
+  setHasHydrated: (v: boolean) => void;
   setSession: (session: Session | null) => void;
   setTeam: (team: Team | null) => void;
   setTeamCharacter: (tc: TeamCharacter | null) => void;
@@ -38,6 +40,7 @@ interface PlayerState {
 export const usePlayerStore = create<PlayerState>()(
   persist(
     (set, get) => ({
+      _hasHydrated: false,
       session: null,
       team: null,
       teamCharacter: null,
@@ -48,6 +51,7 @@ export const usePlayerStore = create<PlayerState>()(
       currentStepIndex: 0,
       score: 1000,
 
+      setHasHydrated: (v) => set({ _hasHydrated: v }),
       setSession: (session) => set({ session }),
       setTeam: (team) => set({ team }),
       setTeamCharacter: (tc) => set({ teamCharacter: tc }),
@@ -94,6 +98,9 @@ export const usePlayerStore = create<PlayerState>()(
             }
       ),
       version: 1,
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );
