@@ -121,8 +121,25 @@ export default function PlayPage() {
 
   if (loadingGame) {
     return (
-      <main className="flex min-h-[100dvh] items-center justify-center px-6 pb-20">
-        <Loader text="Loading your quest..." />
+      <main className="flex min-h-[100dvh] flex-col pb-20">
+        {/* Skeleton header */}
+        <div className="border-b border-white/5 bg-deep/95 px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 animate-pulse rounded-lg bg-white/10" />
+              <div className="h-4 w-24 animate-pulse rounded bg-white/10" />
+            </div>
+            <div className="h-4 w-16 animate-pulse rounded bg-white/10" />
+          </div>
+          <div className="mt-2 h-1 animate-pulse rounded-full bg-white/5" />
+        </div>
+        {/* Skeleton content */}
+        <div className="space-y-4 px-4 pt-4">
+          <div className="h-24 animate-pulse rounded-2xl bg-surface" />
+          <div className="h-32 animate-pulse rounded-2xl bg-surface" />
+          <div className="h-20 animate-pulse rounded-2xl bg-surface" />
+        </div>
+        <BottomNav />
       </main>
     );
   }
@@ -241,12 +258,29 @@ export default function PlayPage() {
   async function loadRankings() {
     setShowRank(true);
     try {
-      // Fetch all teams for this session via the game API
-      const res = await fetch(`/api/game?team_id=${team!.id}&session_id=${session!.id}`);
+      const res = await fetch(`/api/teams?session_id=${session!.id}`);
       const json: ApiResponse = await res.json();
-      // For now, show own team — full ranking would need a dedicated endpoint
       if (json.data) {
-        setRankTeams([{ name: team!.name, score, character: teamCharacter?.animalEmoji ?? null }]);
+        const allTeams = (json.data as Array<{ name: string; hints_used: number; character: string | null; completed_steps: number; id: string }>)
+          .map((t) => ({
+            name: t.name,
+            score: Math.max(0, 1000 - t.hints_used * 15),
+            character: (() => { try { return JSON.parse(t.character ?? "{}").animalEmoji ?? null; } catch { return null; } })(),
+            isMe: t.id === team!.id,
+          }))
+          .sort((a, b) => b.score - a.score);
+
+        // TOP 10 + own team if not in top 10
+        const top10 = allTeams.slice(0, 10);
+        const myIdx = allTeams.findIndex((t) => t.isMe);
+        const myTeam = myIdx >= 0 ? { ...allTeams[myIdx], rank: myIdx + 1 } : null;
+
+        const combined = top10.map((t, i) => ({ ...t, rank: i + 1 }));
+        if (myTeam && myIdx >= 10) {
+          combined.push({ ...myTeam, name: `--- #${myTeam.rank} ${myTeam.name} (you)` });
+        }
+
+        setRankTeams(combined as never);
       }
     } catch { /* silent */ }
   }

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { getCachedScan, setCachedScan } from "@/lib/scan-cache";
 import type { ApiResponse, ScanResult } from "@/lib/types";
 
-// POST /api/scan — traiter un scan QR
+// POST /api/scan — process a QR scan
 export async function POST(req: NextRequest) {
   const { qr_code_id, team_id } = await req.json();
 
@@ -11,6 +13,24 @@ export async function POST(req: NextRequest) {
       { data: null, error: "qr_code_id et team_id requis" },
       { status: 400 }
     );
+  }
+
+  // ── Rate limit: 10 scans/min per team ──
+  const rl = checkRateLimit(`scan:${team_id}`);
+  if (!rl.allowed) {
+    return NextResponse.json<ApiResponse>(
+      { data: null, error: "Too many attempts. Wait a moment." },
+      { status: 429 }
+    );
+  }
+
+  // ── Cache check: same scan within 30s returns cached result ──
+  const cached = getCachedScan(qr_code_id, team_id);
+  if (cached) {
+    return NextResponse.json<ApiResponse<ScanResult>>({
+      data: cached as ScanResult,
+      error: null,
+    });
   }
 
   const supabase = createServerClient();
@@ -26,12 +46,13 @@ export async function POST(req: NextRequest) {
     const result: ScanResult = {
       valid: false,
       reason: "unknown",
-      message: "QR code non reconnu. Essayez un autre code.",
+      message: "This sigil is unrecognized.",
     };
+    setCachedScan(qr_code_id, team_id, result);
     return NextResponse.json<ApiResponse<ScanResult>>({ data: result, error: null });
   }
 
-  // 2. Get team's current active progress entry
+  // 2. Get team's current active progress
   const { data: activeProgressList } = await supabase
     .from("team_progress")
     .select("*")
@@ -44,12 +65,13 @@ export async function POST(req: NextRequest) {
     const result: ScanResult = {
       valid: false,
       reason: "quest_complete",
-      message: "Bravo ! Vous avez terminé toutes les étapes !",
+      message: "You have completed all chapters!",
     };
+    setCachedScan(qr_code_id, team_id, result);
     return NextResponse.json<ApiResponse<ScanResult>>({ data: result, error: null });
   }
 
-  // 3. Get the active step to find its object_id
+  // 3. Get the active step
   const { data: activeStep } = await supabase
     .from("steps")
     .select("*")
@@ -60,14 +82,13 @@ export async function POST(req: NextRequest) {
     const result: ScanResult = {
       valid: false,
       reason: "unknown",
-      message: "Erreur interne. Contactez un organisateur.",
+      message: "Internal error. Contact an organiser.",
     };
     return NextResponse.json<ApiResponse<ScanResult>>({ data: result, error: null });
   }
 
-  // 4. Check if scanned object matches current step's object
+  // 4. Check match
   if (activeStep.object_id !== scannedObject.id) {
-    // Check if this object's steps are already completed (already_scanned)
     const { data: objectSteps } = await supabase
       .from("steps")
       .select("id")
@@ -87,8 +108,9 @@ export async function POST(req: NextRequest) {
         const result: ScanResult = {
           valid: false,
           reason: "already_scanned",
-          message: "Vous avez déjà exploré cet objet ! Cherchez le suivant.",
+          message: "You have already claimed this artifact.",
         };
+        setCachedScan(qr_code_id, team_id, result);
         return NextResponse.json<ApiResponse<ScanResult>>({ data: result, error: null });
       }
     }
@@ -96,16 +118,18 @@ export async function POST(req: NextRequest) {
     const result: ScanResult = {
       valid: false,
       reason: "wrong_order",
-      message: "Ce n'est pas le bon objet... Suivez les indices pour trouver le bon !",
+      message: "This sigil speaks not to you yet... your path lies elsewhere.",
     };
+    setCachedScan(qr_code_id, team_id, result);
     return NextResponse.json<ApiResponse<ScanResult>>({ data: result, error: null });
   }
 
-  // 5. Valid scan — return step data
+  // 5. Valid scan
   const result: ScanResult = {
     valid: true,
     step: activeStep,
     object: scannedObject,
   };
+  setCachedScan(qr_code_id, team_id, result);
   return NextResponse.json<ApiResponse<ScanResult>>({ data: result, error: null });
 }
