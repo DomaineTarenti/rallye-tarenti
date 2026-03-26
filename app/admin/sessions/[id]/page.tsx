@@ -425,6 +425,24 @@ export default function ConfigureSessionPage() {
     setStatusUpdating(false);
   }
 
+  async function regenerateCode() {
+    if (!session) return;
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const l = Array.from({ length: 3 }, () => letters[Math.floor(Math.random() * 26)]).join("");
+    const d = String(Math.floor(Math.random() * 100)).padStart(2, "0");
+    const newCode = `${l}${d}`;
+
+    try {
+      const res = await fetch("/api/session", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: session.id, code: newCode }),
+      });
+      const json: ApiResponse = await res.json();
+      if (json.data) setSession(json.data as Session);
+    } catch { /* silent */ }
+  }
+
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">
@@ -442,10 +460,17 @@ export default function ConfigureSessionPage() {
             <h1 className="text-2xl font-bold text-gray-900">
               {session?.name ?? "Session"}
             </h1>
-            <p className="mt-0.5 text-sm text-gray-500">
-              Code: <span className="font-mono font-bold">{session?.code}</span>
-              {" · "}{objects.length} objects
-            </p>
+            <div className="mt-0.5 flex items-center gap-2 text-sm text-gray-500">
+              <span>Code: <span className="font-mono font-bold">{session?.code}</span></span>
+              <button
+                onClick={regenerateCode}
+                className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+                title="Generate a new code for the next group"
+              >
+                Regenerate
+              </button>
+              <span> · {objects.length} objects</span>
+            </div>
           </div>
           <div className="flex gap-2">
             <button

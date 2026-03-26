@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
-import type { ApiResponse, Team } from "@/lib/types";
+import type { ApiResponse } from "@/lib/types";
 
-// POST /api/team — créer une équipe + initialiser la progression
+// POST /api/team — create a team + initialize progress
 export async function POST(req: NextRequest) {
   const { session_id, name, character } = await req.json();
 
@@ -14,6 +14,56 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = createServerClient();
+
+  // ── Check session is still active ──
+  const { data: session } = await supabase
+    .from("sessions")
+    .select("id, status, started_at, duration_minutes")
+    .eq("id", session_id)
+    .single();
+
+  if (!session || session.status !== "active") {
+    return NextResponse.json<ApiResponse>(
+      { data: null, error: "This session is no longer accepting teams." },
+      { status: 403 }
+    );
+  }
+
+  // ── Auto-expiration check ──
+  if (session.started_at) {
+    const start = new Date(session.started_at).getTime();
+    const gracePeriodMs = (session.duration_minutes + 30) * 60 * 1000;
+    if (Date.now() > start + gracePeriodMs) {
+      return NextResponse.json<ApiResponse>(
+        { data: null, error: "This session has expired." },
+        { status: 403 }
+      );
+    }
+  }
+
+  // ── Check if team code already used and locked ──
+  if (character) {
+    try {
+      const parsed = typeof character === "string" ? JSON.parse(character) : character;
+      if (parsed.teamCode) {
+        const { data: existingTeam } = await supabase
+          .from("teams")
+          .select("id, locked")
+          .eq("session_id", session_id)
+          .filter("character", "like", `%"teamCode":"${parsed.teamCode}"%`)
+          .single();
+
+        if (existingTeam?.locked) {
+          return NextResponse.json<ApiResponse>(
+            { data: null, error: "This fellowship has already completed their journey." },
+            { status: 403 }
+          );
+        }
+      }
+    } catch {
+      // character parsing failed, continue normally
+    }
+  }
 
   // 1. Create team
   const { data: team, error: teamError } = await supabase
@@ -29,7 +79,7 @@ export async function POST(req: NextRequest) {
 
   if (teamError || !team) {
     return NextResponse.json<ApiResponse>(
-      { data: null, error: teamError?.message ?? "Erreur création équipe" },
+      { data: null, error: teamError?.message ?? "Failed to create team" },
       { status: 500 }
     );
   }

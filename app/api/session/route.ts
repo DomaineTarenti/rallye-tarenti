@@ -2,6 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import type { ApiResponse, Session } from "@/lib/types";
 
+function generateCode(): string {
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const l = Array.from({ length: 3 }, () =>
+    letters[Math.floor(Math.random() * 26)]
+  ).join("");
+  const d = String(Math.floor(Math.random() * 100)).padStart(2, "0");
+  return `${l}${d}`;
+}
+
+// Check if a session has expired (started_at + duration + 30min grace < now)
+function isSessionExpired(session: {
+  started_at: string | null;
+  duration_minutes: number;
+}): boolean {
+  if (!session.started_at) return false;
+  const start = new Date(session.started_at).getTime();
+  const gracePeriodMs = (session.duration_minutes + 30) * 60 * 1000;
+  return Date.now() > start + gracePeriodMs;
+}
+
 // GET /api/session?code=ABC123 — get session by code
 // GET /api/session?all=true — list all sessions (admin)
 export async function GET(req: NextRequest) {
@@ -24,7 +44,6 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Count teams per session
     const sessions = (data ?? []).map((s) => ({
       ...s,
       team_count: Array.isArray(s.teams) ? s.teams.length : 0,
@@ -50,7 +69,22 @@ export async function GET(req: NextRequest) {
 
   if (error || !data) {
     return NextResponse.json<ApiResponse>(
-      { data: null, error: "Session introuvable" },
+      { data: null, error: "Session not found. Check your Access Key." },
+      { status: 404 }
+    );
+  }
+
+  // ── Auto-expiration check ──
+  if (data.status === "active" && isSessionExpired(data)) {
+    // Auto-complete and regenerate code
+    const newCode = generateCode();
+    await supabase
+      .from("sessions")
+      .update({ status: "completed", code: newCode })
+      .eq("id", data.id);
+
+    return NextResponse.json<ApiResponse>(
+      { data: null, error: "This session has ended." },
       { status: 404 }
     );
   }
@@ -101,6 +135,19 @@ export async function PATCH(req: NextRequest) {
   }
 
   const supabase = createServerClient();
+
+  // ── If completing a session, regenerate code + lock all teams ──
+  if (updates.status === "completed") {
+    updates.code = generateCode();
+
+    // Lock all finished teams
+    await supabase
+      .from("teams")
+      .update({ locked: true })
+      .eq("session_id", id)
+      .eq("status", "finished");
+  }
+
   const { data, error } = await supabase
     .from("sessions")
     .update(updates)

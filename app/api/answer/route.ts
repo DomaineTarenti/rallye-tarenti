@@ -78,10 +78,10 @@ export async function POST(req: NextRequest) {
         .update({ status: "active" })
         .eq("id", lockedProgress[0].id);
     } else {
-      // All steps completed — mark team as finished
+      // All steps completed — mark team as finished + locked
       await supabase
         .from("teams")
-        .update({ status: "finished" })
+        .update({ status: "finished", locked: true })
         .eq("id", team_id);
     }
 

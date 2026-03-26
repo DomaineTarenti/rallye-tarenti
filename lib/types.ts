@@ -69,6 +69,7 @@ export interface Team {
   rank_label: string | null; // nom personnalisé par l'orga
   completion_time: number | null; // secondes
   certificate_url: string | null;
+  locked: boolean;
   created_at: string;
 }
 
