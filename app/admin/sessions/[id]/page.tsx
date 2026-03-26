@@ -35,6 +35,9 @@ interface ObjectData {
   order: number;
   steps?: StepData[];
   step_id?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  physical_id?: string | null;
   // UI state
   expanded?: boolean;
   dirty?: boolean;
@@ -84,6 +87,9 @@ export default function ConfigureSessionPage() {
               order: o.order as number,
               steps,
               step_id: step?.id,
+              latitude: o.latitude as number | null ?? null,
+              longitude: o.longitude as number | null ?? null,
+              physical_id: o.physical_id as string | null ?? null,
               expanded: false,
               dirty: false,
             };
@@ -642,11 +648,49 @@ export default function ConfigureSessionPage() {
                         </>
                       )}
 
-                      {/* QR Code ID (read-only) */}
+                      {/* GPS Position */}
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-500">GPS Position</label>
+                        {obj.latitude ? (
+                          <div className="flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full bg-green-500" />
+                            <span className="font-mono text-xs text-gray-600">
+                              {String(obj.latitude).slice(0, 10)}, {String(obj.longitude).slice(0, 11)}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs text-amber-600">
+                            <span className="h-2 w-2 rounded-full bg-amber-400" /> Not placed yet
+                          </span>
+                        )}
+                        <button
+                          onClick={async () => {
+                            if (!obj.id) return;
+                            if (!navigator.geolocation) { alert("GPS not available"); return; }
+                            navigator.geolocation.getCurrentPosition(async (pos) => {
+                              await fetch("/api/objects", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  id: obj.id,
+                                  latitude: pos.coords.latitude,
+                                  longitude: pos.coords.longitude,
+                                }),
+                              });
+                              await loadData();
+                            }, () => alert("GPS permission denied"));
+                          }}
+                          className="mt-1 text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                        >
+                          Use my current position
+                        </button>
+                      </div>
+
+                      {/* QR Code ID + Physical ID */}
                       {obj.qr_code_id && (
                         <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-500">QR Code ID</label>
-                          <p className="font-mono text-xs text-gray-400">{obj.qr_code_id}</p>
+                          <label className="mb-1 block text-xs font-medium text-gray-500">QR Code / Physical ID</label>
+                          <p className="font-mono text-xs text-gray-400">{obj.qr_code_id} {obj.physical_id ? `(${obj.physical_id})` : ""}</p>
                         </div>
                       )}
 

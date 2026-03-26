@@ -23,6 +23,7 @@ export interface Session {
   primary_color: string | null;
   created_at: string;
   started_at: string | null;
+  intro_text: string | null;
 }
 
 // ─── Object (objet physique avec QR) ─────────────────────────────
@@ -33,7 +34,11 @@ export interface QuestObject {
   qr_code_id: string;
   order: number;
   description: string | null;
-  model_url: string | null; // URL objet 3D
+  model_url: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  is_final: boolean;
+  physical_id: string | null;
   created_at: string;
 }
 
@@ -70,6 +75,7 @@ export interface Team {
   completion_time: number | null; // secondes
   certificate_url: string | null;
   locked: boolean;
+  object_order: string[];
   created_at: string;
 }
 

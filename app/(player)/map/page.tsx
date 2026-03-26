@@ -187,7 +187,7 @@ export default function MapPage() {
             Return Home
           </Button>
         ) : (
-          <Button onClick={() => router.push("/scan")} size="lg" className="w-full">
+          <Button onClick={() => router.push("/navigate")} size="lg" className="w-full">
             <QrCode className="mr-2 h-5 w-5" />
             Continue the Adventure
           </Button>

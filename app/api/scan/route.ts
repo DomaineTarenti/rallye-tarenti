@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
     const result: ScanResult = {
       valid: false,
       reason: "wrong_order",
-      message: "This sigil speaks not to you yet... your path lies elsewhere.",
+      message: "This artifact is not yet your destiny... your path leads elsewhere for now.",
     };
     setCachedScan(qr_code_id, team_id, result);
     return NextResponse.json<ApiResponse<ScanResult>>({ data: result, error: null });

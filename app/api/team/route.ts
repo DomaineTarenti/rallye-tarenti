@@ -139,7 +139,28 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 1. Create team
+  // 1. Get all objects for session
+  const { data: allObjects } = await supabase
+    .from("objects")
+    .select("*")
+    .eq("session_id", session_id)
+    .order("order");
+
+  // 2. Generate randomized object order (final object always last)
+  const regularObjects = (allObjects ?? []).filter((o) => !o.is_final);
+  const finalObject = (allObjects ?? []).find((o) => o.is_final);
+
+  // Fisher-Yates shuffle
+  const shuffled = [...regularObjects];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  const orderedObjects = finalObject ? [...shuffled, finalObject] : shuffled;
+  const objectOrder = orderedObjects.map((o) => o.id);
+
+  // 3. Create team with object_order
   const { data: team, error: teamError } = await supabase
     .from("teams")
     .insert({
@@ -147,6 +168,7 @@ export async function POST(req: NextRequest) {
       name,
       character: typeof character === "string" ? character : JSON.stringify(character),
       status: "playing",
+      object_order: objectOrder,
     })
     .select()
     .single();
@@ -158,15 +180,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 2. Get all objects for session, ordered
-  const { data: objects } = await supabase
-    .from("objects")
-    .select("*")
-    .eq("session_id", session_id)
-    .order("order");
-
-  // 3. Get all steps for those objects, ordered
-  const objectIds = (objects ?? []).map((o) => o.id);
+  // 4. Get steps for ordered objects
+  const objectIds = orderedObjects.map((o) => o.id);
   let steps: Array<Record<string, unknown>> = [];
 
   if (objectIds.length > 0) {
@@ -175,20 +190,19 @@ export async function POST(req: NextRequest) {
       .select("*")
       .in("object_id", objectIds)
       .order("order");
-
     steps = stepsData ?? [];
   }
 
-  // Sort steps by their object order, then step order
-  const objectOrderMap = new Map((objects ?? []).map((o) => [o.id, o.order]));
+  // Sort steps by the team's object order
+  const objOrderIdx = new Map(objectOrder.map((id, idx) => [id, idx]));
   steps.sort((a, b) => {
-    const objOrderA = objectOrderMap.get(a.object_id as string) ?? 0;
-    const objOrderB = objectOrderMap.get(b.object_id as string) ?? 0;
-    if (objOrderA !== objOrderB) return objOrderA - objOrderB;
+    const oa = objOrderIdx.get(a.object_id as string) ?? 999;
+    const ob = objOrderIdx.get(b.object_id as string) ?? 999;
+    if (oa !== ob) return oa - ob;
     return ((a.order as number) ?? 0) - ((b.order as number) ?? 0);
   });
 
-  // 4. Initialize team_progress for all steps
+  // 5. Initialize team_progress in the team's order
   let progress: Array<Record<string, unknown>> = [];
 
   if (steps.length > 0) {
@@ -208,7 +222,13 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json<ApiResponse>(
     {
-      data: { team, objects: objects ?? [], steps, progress },
+      data: {
+        team,
+        objects: orderedObjects,
+        steps,
+        progress,
+        intro_text: null, // fetched separately
+      },
       error: null,
     },
     { status: 201 }
