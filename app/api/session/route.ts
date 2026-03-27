@@ -153,6 +153,27 @@ export async function POST(req: NextRequest) {
     console.error("Failed to clone template objects:", objErr.message);
   }
 
+  // Create 2 default guardian staff members
+  const defaultStaff = [
+    {
+      session_id: data.id,
+      name: "Gardien 1",
+      role: "gardien",
+      validation_code: String(Math.floor(1000 + Math.random() * 9000)),
+    },
+    {
+      session_id: data.id,
+      name: "Gardien 2",
+      role: "gardien",
+      validation_code: String(Math.floor(1000 + Math.random() * 9000)),
+    },
+  ];
+
+  const { error: staffErr } = await supabase.from("staff_members").insert(defaultStaff);
+  if (staffErr) {
+    console.error("Failed to create default staff:", staffErr.message);
+  }
+
   return NextResponse.json<ApiResponse<Session>>(
     { data, error: null },
     { status: 201 }
