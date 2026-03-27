@@ -16,23 +16,13 @@ import type { ApiResponse, ScanResult } from "@/lib/types";
 
 export default function ScanPage() {
   const router = useRouter();
-  const team = usePlayerStore((s) => s.team);
-  const session = usePlayerStore((s) => s.session);
+
+  // Read store values reactively for display
   const currentStep = usePlayerStore((s) => s.currentStep);
   const objects = usePlayerStore((s) => s.objects);
   const setCurrentStep = usePlayerStore((s) => s.setCurrentStep);
 
-  // Guard: redirect if store is empty
-  if (!team || !session) {
-    if (typeof window !== "undefined") router.replace("/");
-    return null;
-  }
-
-  // Get current object info for context
-  const currentObject = currentStep ? objects.find((o) => o.id === currentStep.object_id) : null;
-  const objectName = currentObject?.narrative_name || (currentObject?.name ?? "the artifact");
-  const objectDesc = currentObject?.description ?? "";
-
+  const [ready, setReady] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -43,12 +33,32 @@ export default function ScanPage() {
   const scannerRef = useRef<HTMLDivElement>(null);
   const processingRef = useRef(false);
 
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  // Wait for hydration — check store has team + session
+  useEffect(() => {
+    const state = usePlayerStore.getState();
+    if (!state.team || !state.session) {
+      router.replace("/");
+      return;
+    }
+    setReady(true);
+  }, [router]);
+
+  // Get current object info for display
+  const currentObject = currentStep ? objects.find((o) => o.id === currentStep.object_id) : null;
+  const objectName = currentObject?.narrative_name || (currentObject?.name ?? "the artifact");
+  const objectDesc = currentObject?.description ?? "";
 
   const processScan = useCallback(
     async (qrCodeId: string) => {
-      if (processingRef.current || !team) return;
+      if (processingRef.current) return;
+
+      // Read fresh state at scan time — avoids stale closure
+      const { team, session } = usePlayerStore.getState();
+      if (!team || !session) {
+        router.replace("/");
+        return;
+      }
+
       processingRef.current = true;
       setProcessing(true);
 
@@ -56,13 +66,17 @@ export default function ScanPage() {
         const res = await fetch("/api/scan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ qr_code_id: qrCodeId, team_id: team.id }),
+          body: JSON.stringify({
+            qr_code_id: qrCodeId,
+            team_id: team.id,
+            session_id: session.id,
+          }),
         });
         const json: ApiResponse<ScanResult> = await res.json();
         const result = json.data;
 
         if (!result) {
-          setScanResult({ valid: false, reason: "unknown", message: "Server communication error." });
+          setScanResult({ valid: false, reason: "unknown", message: json.error ?? "Server communication error." });
           processingRef.current = false;
           setProcessing(false);
           return;
@@ -72,7 +86,7 @@ export default function ScanPage() {
 
         if (result.valid && result.step) {
           setCurrentStep(result.step);
-          setTimeout(() => router.push("/step"), 1500);
+          setTimeout(() => router.push("/play"), 1500);
         }
 
         processingRef.current = false;
@@ -83,12 +97,12 @@ export default function ScanPage() {
         setProcessing(false);
       }
     },
-    [team, setCurrentStep, router]
+    [setCurrentStep, router]
   );
 
   // Initialize QR scanner
   useEffect(() => {
-    if (!mounted || !scannerRef.current || manualMode || scanResult) return;
+    if (!ready || !scannerRef.current || manualMode || scanResult) return;
 
     let html5QrCode: { stop: () => Promise<void>; start: Function } | null = null;
     let alive = true;
@@ -112,7 +126,7 @@ export default function ScanPage() {
         );
 
         if (alive) setScanning(true);
-      } catch (err) {
+      } catch {
         if (alive) {
           setCameraError("Camera not accessible. Use the staff code instead.");
           setManualMode(true);
@@ -125,10 +139,15 @@ export default function ScanPage() {
       alive = false;
       html5QrCode?.stop().catch(() => {});
     };
-  }, [mounted, manualMode, scanResult, processScan]);
+  }, [ready, manualMode, scanResult, processScan]);
 
-  if (!mounted) return null;
-  // team/session guard is at the top of the component
+  if (!ready) {
+    return (
+      <main className="flex min-h-[100dvh] items-center justify-center bg-deep">
+        <p className="text-sm text-gray-500">Loading...</p>
+      </main>
+    );
+  }
 
   function handleManualSubmit() {
     if (!manualCode.trim()) return;
@@ -149,7 +168,6 @@ export default function ScanPage() {
     <XCircle className="h-16 w-16 text-red-400" />
   );
 
-  // Narrative messages per scan result
   const resultTitle = scanResult?.valid
     ? "Sigil Deciphered!"
     : scanResult?.reason === "wrong_order"
@@ -183,7 +201,7 @@ export default function ScanPage() {
       </div>
 
       <div className="flex flex-1 flex-col items-center px-4">
-        {/* ── Scan result ── */}
+        {/* Scan result */}
         {scanResult && (
           <Card className="mb-6 w-full max-w-sm bg-surface text-center">
             <div className="mb-4 flex justify-center">{resultIcon}</div>
@@ -207,7 +225,7 @@ export default function ScanPage() {
           </Card>
         )}
 
-        {/* ── Camera scanner ── */}
+        {/* Camera scanner */}
         {!scanResult && !manualMode && (
           <>
             <div className="relative mb-4 w-full max-w-sm overflow-hidden rounded-2xl bg-black">
@@ -220,17 +238,12 @@ export default function ScanPage() {
                 <div id="qr-reader" ref={scannerRef} className="h-80 w-full" />
               )}
 
-              {/* Animated corners */}
               {scanning && !cameraError && (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                   <div className="relative h-52 w-52">
-                    {/* Top-left */}
                     <div className="animate-corner-pulse absolute left-0 top-0 h-6 w-6 rounded-tl-lg border-l-2 border-t-2 border-primary" />
-                    {/* Top-right */}
                     <div className="animate-corner-pulse absolute right-0 top-0 h-6 w-6 rounded-tr-lg border-r-2 border-t-2 border-primary" style={{ animationDelay: "0.5s" }} />
-                    {/* Bottom-left */}
                     <div className="animate-corner-pulse absolute bottom-0 left-0 h-6 w-6 rounded-bl-lg border-b-2 border-l-2 border-primary" style={{ animationDelay: "1s" }} />
-                    {/* Bottom-right */}
                     <div className="animate-corner-pulse absolute bottom-0 right-0 h-6 w-6 rounded-br-lg border-b-2 border-r-2 border-primary" style={{ animationDelay: "1.5s" }} />
                   </div>
                 </div>
@@ -250,7 +263,7 @@ export default function ScanPage() {
           </>
         )}
 
-        {/* ── Manual mode ── */}
+        {/* Manual mode */}
         {!scanResult && manualMode && (
           <Card className="mb-6 w-full max-w-sm bg-surface">
             <h2 className="mb-1 text-center font-bold">Enter Staff Code</h2>
