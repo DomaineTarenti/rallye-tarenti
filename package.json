@@ -7,10 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "db:migrate": "npx supabase db query --linked -f",
+    "db:migrate:all": "npx supabase db query --linked -f supabase/migrate-all.sql",
     "db:seed": "node supabase/run-seed.mjs",
-    "db:sql": "node supabase/db-execute.mjs",
-    "db:pending": "node supabase/db-execute.mjs --pending",
-    "db:all": "node supabase/db-execute.mjs --all"
+    "db:query": "npx supabase db query --linked"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
