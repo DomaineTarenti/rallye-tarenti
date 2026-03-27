@@ -1,171 +1,148 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  ChevronLeft,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
-  Keyboard,
-  QrCode,
-} from "lucide-react";
-import { Button, Card, Input, BottomNav } from "@/components/shared";
+import { ChevronLeft, QrCode, Keyboard, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import { Button, Card, Input } from "@/components/shared";
 import { usePlayerStore } from "@/lib/store";
 import type { ApiResponse, ScanResult } from "@/lib/types";
 
 export default function ScanPage() {
   const router = useRouter();
-
-  // Subscribe to hydration flag + display values
   const hasHydrated = usePlayerStore((s) => s._hasHydrated);
   const team = usePlayerStore((s) => s.team);
   const session = usePlayerStore((s) => s.session);
-  const currentStep = usePlayerStore((s) => s.currentStep);
-  const objects = usePlayerStore((s) => s.objects);
   const setCurrentStep = usePlayerStore((s) => s.setCurrentStep);
 
   const [ready, setReady] = useState(false);
-  const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [processing, setProcessing] = useState(false);
   const [manualMode, setManualMode] = useState(false);
   const [manualCode, setManualCode] = useState("");
-  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState(false);
+  const [scannerActive, setScannerActive] = useState(false);
 
-  const scannerRef = useRef<HTMLDivElement>(null);
-  const html5QrCodeRef = useRef<{ stop: () => Promise<void> } | null>(null);
-  const processingRef = useRef(false);
+  const scannerRef = useRef<{ stop: () => Promise<void> } | null>(null);
+  const processingLock = useRef(false);
 
-  // Wait for Zustand to hydrate from localStorage, THEN check team/session
+  // Wait for hydration
   useEffect(() => {
-    if (!hasHydrated) return; // still loading from localStorage
+    if (!hasHydrated) return;
     if (!team || !session) {
-      console.log("[SCAN PAGE] No team/session after hydration, redirecting home");
       router.replace("/");
       return;
     }
-    console.log("[SCAN PAGE] Ready — team:", team.name, "session:", session.name);
     setReady(true);
   }, [hasHydrated, team, session, router]);
 
-  // Get current object info for display
-  const currentObject = currentStep ? objects.find((o) => o.id === currentStep.object_id) : null;
-  const objectName = currentObject?.narrative_name || (currentObject?.name ?? "the artifact");
-  const objectDesc = currentObject?.description ?? "";
-
-  const processScan = useCallback(
-    async (qrCodeId: string) => {
-      if (processingRef.current) return;
-
-      // Read fresh state at scan time
-      const state = usePlayerStore.getState();
-      const t = state.team;
-      const s = state.session;
-
-      console.log("[SCAN FRONT] team:", t?.id, "session:", s?.id, "qr_code:", qrCodeId);
-
-      if (!t || !s) {
-        console.error("[SCAN FRONT] No team/session in store at scan time");
-        setScanResult({ valid: false, reason: "unknown", message: "Session expired. Please rejoin." });
-        return;
-      }
-
-      processingRef.current = true;
-      setProcessing(true);
-
-      try {
-        const res = await fetch("/api/scan", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            qr_code_id: qrCodeId,
-            team_id: t.id,
-            session_id: s.id,
-          }),
-        });
-
-        const json = await res.json();
-        console.log("[SCAN FRONT] API response:", JSON.stringify(json));
-
-        // Handle both { data: { valid, ... } } and direct { valid, ... }
-        const result: ScanResult | null = json.data ?? json;
-
-        if (!result || result.valid === undefined) {
-          setScanResult({ valid: false, reason: "unknown", message: json.error ?? "Server communication error." });
-          processingRef.current = false;
-          setProcessing(false);
-          return;
-        }
-
-        setScanResult(result);
-
-        if (result.valid && result.step) {
-          // Stop QR scanner immediately to prevent double scans
-          try { await html5QrCodeRef.current?.stop(); } catch { /* ignore */ }
-
-          setCurrentStep(result.step);
-          console.log("[SCAN FRONT] Valid scan — navigating to /play");
-          // Short delay to show success UI, then navigate
-          setTimeout(() => router.push("/play"), 1200);
-          return; // don't reset processingRef — we're navigating away
-        }
-
-        processingRef.current = false;
-        setProcessing(false);
-      } catch (err) {
-        console.error("[SCAN FRONT] Fetch error:", err);
-        setScanResult({ valid: false, reason: "unknown", message: "Connection error. Check your network." });
-        processingRef.current = false;
-        setProcessing(false);
-      }
-    },
-    [setCurrentStep, router]
-  );
-
-  // Initialize QR scanner
+  // Initialize camera scanner
   useEffect(() => {
-    if (!ready || !scannerRef.current || manualMode || scanResult) return;
+    if (!ready || manualMode || scanResult || cameraError) return;
 
-    let html5QrCode: { stop: () => Promise<void>; start: Function } | null = null;
-    let alive = true;
+    let instance: { stop: () => Promise<void> } | null = null;
+    let cancelled = false;
 
-    async function initScanner() {
+    const startScanner = async () => {
       try {
         const { Html5Qrcode } = await import("html5-qrcode");
-        if (!alive) return;
+        if (cancelled) return;
 
-        html5QrCode = new Html5Qrcode("qr-reader");
-        html5QrCodeRef.current = html5QrCode;
+        const scanner = new Html5Qrcode("qr-reader");
+        instance = scanner;
+        scannerRef.current = scanner;
 
-        await html5QrCode.start(
+        await scanner.start(
           { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
-          (decodedText: string) => {
-            html5QrCode?.stop().catch(() => {});
-            setScanning(false);
-            processScan(decodedText);
+          { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0, disableFlip: false },
+          async (decodedText: string) => {
+            // Stop scanner immediately on decode
+            try { await scanner.stop(); } catch { /* ignore */ }
+            instance = null;
+            scannerRef.current = null;
+            setScannerActive(false);
+            handleScanResult(decodedText);
           },
-          () => {}
+          () => {} // ignore per-frame errors
         );
 
-        if (alive) setScanning(true);
-      } catch {
-        if (alive) {
-          setCameraError("Camera not accessible. Use the staff code instead.");
+        if (!cancelled) setScannerActive(true);
+      } catch (err) {
+        console.error("[SCANNER] Init error:", err);
+        if (!cancelled) {
+          setCameraError(true);
           setManualMode(true);
         }
       }
+    };
+
+    // Small delay to let the DOM mount the #qr-reader div
+    const timer = setTimeout(startScanner, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      if (instance) {
+        instance.stop().catch(() => {});
+        instance = null;
+      }
+      scannerRef.current = null;
+    };
+  }, [ready, manualMode, scanResult, cameraError]);
+
+  async function handleScanResult(code: string) {
+    if (processingLock.current) return;
+    processingLock.current = true;
+    setProcessing(true);
+
+    const state = usePlayerStore.getState();
+    const t = state.team;
+    const s = state.session;
+
+    console.log("[SCAN] code:", code, "team:", t?.id, "session:", s?.id);
+
+    if (!t || !s) {
+      setScanResult({ valid: false, reason: "unknown", message: "Session expired. Please rejoin." });
+      processingLock.current = false;
+      setProcessing(false);
+      return;
     }
 
-    initScanner();
-    return () => {
-      alive = false;
-      html5QrCode?.stop().catch(() => {});
-    };
-  }, [ready, manualMode, scanResult, processScan]);
+    try {
+      const res = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ qr_code_id: code, team_id: t.id, session_id: s.id }),
+      });
 
-  // Loading state while waiting for hydration
+      const json = await res.json();
+      console.log("[SCAN] Response:", JSON.stringify(json));
+
+      const result: ScanResult = json.data ?? json;
+
+      if (!result || result.valid === undefined) {
+        setScanResult({ valid: false, reason: "unknown", message: json.error ?? "Server error" });
+        processingLock.current = false;
+        setProcessing(false);
+        return;
+      }
+
+      setScanResult(result);
+
+      if (result.valid && result.step) {
+        setCurrentStep(result.step);
+        setTimeout(() => router.push("/play"), 1000);
+        return; // don't unlock — navigating away
+      }
+    } catch (err) {
+      console.error("[SCAN] Fetch error:", err);
+      setScanResult({ valid: false, reason: "unknown", message: "Connection error." });
+    }
+
+    processingLock.current = false;
+    setProcessing(false);
+  }
+
+  // Loading
   if (!ready) {
     return (
       <main className="flex min-h-[100dvh] items-center justify-center bg-deep">
@@ -174,74 +151,51 @@ export default function ScanPage() {
     );
   }
 
-  function handleManualSubmit() {
-    if (!manualCode.trim()) return;
-    processScan(manualCode.trim().toUpperCase());
-  }
-
   function handleRetry() {
     setScanResult(null);
     setManualCode("");
-    setCameraError(null);
+    processingLock.current = false;
   }
 
-  const resultIcon = scanResult?.valid ? (
-    <CheckCircle2 className="h-16 w-16 text-green-400" />
-  ) : scanResult?.reason === "wrong_order" ? (
-    <AlertTriangle className="h-16 w-16 text-amber" />
-  ) : (
-    <XCircle className="h-16 w-16 text-red-400" />
-  );
+  // ── Result icons ──
+  const resultIcon = scanResult?.valid
+    ? <CheckCircle2 className="h-14 w-14 text-green-400" />
+    : scanResult?.reason === "wrong_order"
+    ? <AlertTriangle className="h-14 w-14 text-amber" />
+    : <XCircle className="h-14 w-14 text-red-400" />;
 
   const resultTitle = scanResult?.valid
-    ? "Sigil Deciphered!"
-    : scanResult?.reason === "wrong_order"
-    ? "Wrong Path"
-    : scanResult?.reason === "already_scanned"
-    ? "Already Claimed"
-    : "Unknown Sigil";
-
-  const resultMessage = scanResult?.valid
-    ? "The artifact reveals its secrets..."
-    : scanResult?.reason === "wrong_order"
-    ? "This sigil speaks not to you yet... your path lies elsewhere."
-    : scanResult?.reason === "already_scanned"
-    ? "You have already claimed this artifact."
-    : scanResult?.message ?? "This sigil is unrecognized.";
+    ? "Artifact Found!"
+    : scanResult?.reason === "wrong_order" ? "Wrong Path"
+    : scanResult?.reason === "already_scanned" ? "Already Claimed"
+    : "Unknown Code";
 
   return (
-    <main className="flex min-h-[100dvh] flex-col bg-deep pb-20">
+    <main className="flex min-h-[100dvh] flex-col bg-deep">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-4">
+      <div className="flex items-center gap-3 px-4 py-3">
         <button
           onClick={() => router.push("/play")}
-          className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface text-gray-400 hover:text-white"
+          className="flex h-9 w-9 items-center justify-center rounded-xl bg-surface text-gray-400"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <div>
-          <h1 className="text-lg font-bold">Decipher the Sigil</h1>
-          <p className="text-xs text-gray-500 truncate max-w-[200px]">{objectName}</p>
-        </div>
+        <h1 className="text-lg font-bold">Scan</h1>
       </div>
 
-      <div className="flex flex-1 flex-col items-center px-4">
-        {/* Scan result */}
+      <div className="flex flex-1 flex-col items-center justify-center px-4">
+
+        {/* ── Result ── */}
         {scanResult && (
           <Card className="mb-6 w-full max-w-sm bg-surface text-center">
-            <div className="mb-4 flex justify-center">{resultIcon}</div>
-            <h2 className={`mb-2 text-lg font-bold ${
-              scanResult.valid ? "text-green-400"
-              : scanResult.reason === "wrong_order" ? "text-amber"
-              : "text-red-400"
-            }`}>
+            <div className="mb-3 flex justify-center">{resultIcon}</div>
+            <h2 className={`mb-1 text-lg font-bold ${scanResult.valid ? "text-green-400" : "text-red-400"}`}>
               {resultTitle}
             </h2>
-            <p className="mb-4 text-sm italic text-gray-400">{resultMessage}</p>
-
-            {scanResult.valid ? (
-              <p className="text-sm text-gray-500">Entering the archive...</p>
-            ) : (
+            <p className="mb-4 text-sm text-gray-400">
+              {scanResult.valid ? "Loading the riddle..." : (scanResult.message ?? "Try again.")}
+            </p>
+            {!scanResult.valid && (
               <div className="flex gap-3">
                 <Button onClick={handleRetry} variant="secondary" className="flex-1">Try again</Button>
                 <Button onClick={() => router.push("/play")} variant="ghost" className="flex-1">Return</Button>
@@ -250,20 +204,14 @@ export default function ScanPage() {
           </Card>
         )}
 
-        {/* Camera scanner */}
+        {/* ── Camera scanner ── */}
         {!scanResult && !manualMode && (
           <>
             <div className="relative mb-4 w-full max-w-sm overflow-hidden rounded-2xl bg-black">
-              {cameraError ? (
-                <div className="flex h-80 flex-col items-center justify-center p-6 text-center">
-                  <AlertTriangle className="mb-3 h-8 w-8 text-amber" />
-                  <p className="text-sm text-gray-400">{cameraError}</p>
-                </div>
-              ) : (
-                <div id="qr-reader" ref={scannerRef} className="h-80 w-full" />
-              )}
+              <div id="qr-reader" style={{ width: "100%", minHeight: 300 }} />
 
-              {scanning && !cameraError && (
+              {/* Animated corners overlay */}
+              {scannerActive && (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                   <div className="relative h-52 w-52">
                     <div className="animate-corner-pulse absolute left-0 top-0 h-6 w-6 rounded-tl-lg border-l-2 border-t-2 border-primary" />
@@ -276,60 +224,54 @@ export default function ScanPage() {
             </div>
 
             {processing && (
-              <p className="mb-4 animate-pulse text-sm text-primary">Deciphering sigil...</p>
+              <p className="mb-3 animate-pulse text-sm text-primary">Checking...</p>
             )}
 
-            <p className="mb-2 text-center text-sm text-gray-300">
-              Point your device at <span className="font-medium text-primary">{objectName}</span>
+            <p className="mb-4 text-center text-sm text-gray-400">
+              Point at the artifact QR code
             </p>
-            {objectDesc && (
-              <p className="mb-6 text-center text-xs text-gray-500">{objectDesc}</p>
-            )}
           </>
         )}
 
-        {/* Manual mode */}
+        {/* ── Manual mode ── */}
         {!scanResult && manualMode && (
           <Card className="mb-6 w-full max-w-sm bg-surface">
-            <h2 className="mb-1 text-center font-bold">Enter Staff Code</h2>
-            <p className="mb-4 text-center text-sm text-gray-400">
-              Enter the object code or staff code
+            <h2 className="mb-1 text-center font-bold">Enter Code</h2>
+            <p className="mb-3 text-center text-xs text-gray-500">
+              {cameraError ? "Camera unavailable — enter code manually" : "Type the code printed on the artifact"}
             </p>
             <div className="flex gap-2">
               <Input
                 value={manualCode}
                 onChange={(e) => setManualCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === "Enter" && handleScanResult(manualCode.trim().toUpperCase())}
                 placeholder="OBJ-01"
                 maxLength={20}
                 className="bg-deep text-center font-mono tracking-widest"
               />
-              <Button onClick={handleManualSubmit} disabled={!manualCode.trim() || processing}>OK</Button>
+              <Button
+                onClick={() => handleScanResult(manualCode.trim().toUpperCase())}
+                disabled={!manualCode.trim() || processing}
+              >
+                OK
+              </Button>
             </div>
-            <button
-              onClick={() => router.push("/play")}
-              className="mt-4 w-full text-center text-xs text-gray-500 hover:text-gray-300"
-            >
-              Request Curator Assistance
-            </button>
           </Card>
         )}
 
         {/* Mode toggle */}
         {!scanResult && (
           <button
-            onClick={() => { setManualMode(!manualMode); setCameraError(null); }}
-            className="flex items-center gap-2 text-sm text-gray-500 transition hover:text-gray-300"
+            onClick={() => { setManualMode(!manualMode); setCameraError(false); }}
+            className="mt-2 flex items-center gap-2 text-sm text-gray-500"
           >
-            {manualMode ? (
-              <><QrCode className="h-4 w-4" /> Scan a sigil</>
-            ) : (
-              <><Keyboard className="h-4 w-4" /> Enter code manually</>
-            )}
+            {manualMode
+              ? <><QrCode className="h-4 w-4" /> Use camera</>
+              : <><Keyboard className="h-4 w-4" /> Enter manually</>
+            }
           </button>
         )}
       </div>
-
-      <BottomNav />
     </main>
   );
 }
