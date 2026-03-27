@@ -78,6 +78,35 @@ export default function PlayPage() {
     return () => { supabase.removeChannel(ch); };
   }, [team]);
 
+  // Realtime: detect when a guardian validates an epreuve
+  useEffect(() => {
+    if (!team || !currentStep || currentStep.type !== "epreuve") return;
+
+    const ch = supabase
+      .channel(`progress-${team.id}`)
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "team_progress",
+        filter: `team_id=eq.${team.id}`,
+      }, (payload) => {
+        const row = payload.new as { step_id: string; status: string };
+        if (row.step_id === currentStep.id && row.status === "completed") {
+          console.log("[PLAY] Epreuve validated by guardian — advancing");
+          // Update local progress
+          setProgress(progress.map((p) =>
+            p.step_id === currentStep.id ? { ...p, status: "completed" as const, completed_at: new Date().toISOString() } : p
+          ));
+          setCurrentStepScore(30);
+          setScore(score + 30);
+          router.push("/celebrate");
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(ch); };
+  }, [team, currentStep, progress, score, setProgress, setCurrentStepScore, setScore, router]);
+
   const loadGameState = useCallback(async () => {
     if (!team || !session) return;
     setLoadingGame(true);
@@ -314,6 +343,36 @@ export default function PlayPage() {
     finally { setHintLoading(null); }
   }
 
+  async function handleStaffCode() {
+    if (answer.trim().length !== 4 || submitting) return;
+    setSubmitting(true);
+    setFeedback(null);
+    try {
+      const res = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ qr_code_id: answer.trim(), team_id: team!.id, session_id: session!.id }),
+      });
+      const json = await res.json();
+      const result = json.data;
+      if (result?.valid) {
+        const updated = progress.map((p) =>
+          p.step_id === step.id ? { ...p, status: "completed" as const, completed_at: new Date().toISOString() } : p
+        );
+        setProgress(updated);
+        setCurrentStepScore(30);
+        setScore(score + 30);
+        router.push("/celebrate");
+      } else {
+        setFeedback({ type: "error", msg: result?.message ?? "Invalid code" });
+      }
+    } catch {
+      setFeedback({ type: "error", msg: "Connection error" });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   const HINT_BUTTONS = [
     { level: 1, label: "Rephrase", cost: 15, color: "text-amber", bg: "border-amber/20" },
     { level: 2, label: "Direction", cost: 25, color: "text-orange-400", bg: "border-orange-400/20" },
@@ -480,10 +539,33 @@ export default function PlayPage() {
           )}
 
           {enigmaType === "staff" && (
-            <div className="animate-guardian-pulse rounded-xl border border-primary/30 bg-primary/5 p-5 text-center">
-              <ShieldCheck className="mx-auto mb-2 h-8 w-8 text-primary" />
-              <p className="font-medium text-white">Find the Guardian</p>
-              <p className="mt-1 text-sm text-gray-400">A Guardian must validate this challenge</p>
+            <div className="space-y-3">
+              <div className="animate-guardian-pulse rounded-xl border border-primary/30 bg-primary/5 p-5 text-center">
+                <ShieldCheck className="mx-auto mb-2 h-8 w-8 text-primary" />
+                <p className="font-medium text-white">Find the Guardian</p>
+                <p className="mt-1 text-sm text-gray-400">The Guardian will validate your challenge</p>
+              </div>
+              <div className="rounded-xl border border-white/5 bg-surface p-4">
+                <p className="mb-2 text-center text-xs text-gray-500">Or enter the Guardian&apos;s code</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={answer}
+                    onChange={(e) => setAnswer(e.target.value)}
+                    placeholder="4-digit code"
+                    maxLength={4}
+                    className="flex-1 rounded-xl border border-white/10 bg-deep px-4 py-3 text-center font-mono text-xl tracking-[0.3em] text-white placeholder-gray-500 focus:border-primary focus:outline-none"
+                    onKeyDown={(e) => e.key === "Enter" && answer.trim().length === 4 && handleStaffCode()}
+                  />
+                  <Button onClick={handleStaffCode} disabled={answer.trim().length !== 4 || submitting} className="px-4">
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+                {feedback && (
+                  <p className={`mt-2 text-center text-sm ${feedback.type === "error" ? "text-red-400" : "text-green-400"}`}>{feedback.msg}</p>
+                )}
+              </div>
             </div>
           )}
         </Card>
