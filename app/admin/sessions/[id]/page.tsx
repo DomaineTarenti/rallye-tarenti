@@ -14,6 +14,7 @@ import {
   Loader2,
   Play,
   Pause,
+  RefreshCw,
 } from "lucide-react";
 import { Loader } from "@/components/shared";
 import type { ApiResponse, Session } from "@/lib/types";
@@ -30,6 +31,7 @@ interface StepData {
 interface ObjectData {
   id?: string;
   name: string;
+  narrative_name?: string | null;
   description: string;
   qr_code_id?: string;
   order: number;
@@ -55,6 +57,7 @@ export default function ConfigureSessionPage() {
   const [generating, setGenerating] = useState(false);
   const [generatingQR, setGeneratingQR] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState(false);
+  const [regeneratingNarrative, setRegeneratingNarrative] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -87,6 +90,7 @@ export default function ConfigureSessionPage() {
               order: o.order as number,
               steps,
               step_id: step?.id,
+              narrative_name: (o.narrative_name as string | null) ?? null,
               latitude: o.latitude as number | null ?? null,
               longitude: o.longitude as number | null ?? null,
               physical_id: o.physical_id as string | null ?? null,
@@ -230,6 +234,36 @@ export default function ConfigureSessionPage() {
     setObjects((prev) => prev.filter((_, i) => i !== idx).map((o, i) => ({ ...o, order: i + 1 })));
   }
 
+  async function regenerateNarrativeName(idx: number) {
+    const obj = objects[idx];
+    if (!obj.id || !session) return;
+    setRegeneratingNarrative(obj.id);
+    try {
+      const res = await fetch("/api/scenario/narrative-name", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          base_name: obj.name,
+          theme: session.theme ?? "A mysterious adventure",
+          session_name: session.name,
+        }),
+      });
+      const json: ApiResponse = await res.json();
+      const data = json.data as { narrative_name: string } | null;
+      if (data?.narrative_name) {
+        await fetch("/api/objects", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: obj.id, narrative_name: data.narrative_name }),
+        });
+        setObjects((prev) =>
+          prev.map((o, i) => i === idx ? { ...o, narrative_name: data.narrative_name } : o)
+        );
+      }
+    } catch { /* silent */ }
+    setRegeneratingNarrative(null);
+  }
+
   async function generateScenario() {
     if (!session) return;
     setGenerating(true);
@@ -250,6 +284,7 @@ export default function ConfigureSessionPage() {
       if (data?.stages) {
         const newObjects: ObjectData[] = data.stages.map((s, i) => ({
           name: s.object_name ?? `Object ${i + 1}`,
+          narrative_name: s.narrative_name ?? null,
           description: s.object_description ?? "",
           order: i + 1,
           steps: [{
@@ -550,13 +585,29 @@ export default function ConfigureSessionPage() {
                     {idx + 1}
                   </span>
 
-                  <input
-                    type="text"
-                    value={obj.name}
-                    onChange={(e) => updateObject(idx, "name", e.target.value)}
-                    placeholder="Object name..."
-                    className="flex-1 bg-transparent text-sm font-medium text-gray-900 placeholder-gray-400 focus:outline-none"
-                  />
+                  <div className="flex flex-1 flex-col min-w-0">
+                    <input
+                      type="text"
+                      value={obj.name}
+                      onChange={(e) => updateObject(idx, "name", e.target.value)}
+                      placeholder="Object name..."
+                      className="bg-transparent text-sm font-medium text-gray-900 placeholder-gray-400 focus:outline-none"
+                    />
+                    {obj.narrative_name && (
+                      <span className="truncate text-xs text-gray-400">{obj.narrative_name}</span>
+                    )}
+                  </div>
+
+                  {obj.id && (
+                    <button
+                      onClick={() => regenerateNarrativeName(idx)}
+                      disabled={regeneratingNarrative === obj.id}
+                      title="Regenerate narrative name"
+                      className="shrink-0 text-gray-300 hover:text-indigo-500 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${regeneratingNarrative === obj.id ? "animate-spin" : ""}`} />
+                    </button>
+                  )}
 
                   {step && (
                     <span className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${

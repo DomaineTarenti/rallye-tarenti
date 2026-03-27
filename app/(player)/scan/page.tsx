@@ -30,7 +30,7 @@ export default function ScanPage() {
 
   // Get current object info for context
   const currentObject = currentStep ? objects.find((o) => o.id === currentStep.object_id) : null;
-  const objectName = currentObject?.name ?? "the artifact";
+  const objectName = currentObject?.narrative_name || (currentObject?.name ?? "the artifact");
   const objectDesc = currentObject?.description ?? "";
 
   const [scanning, setScanning] = useState(false);

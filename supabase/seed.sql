@@ -25,16 +25,16 @@ DELETE FROM objects WHERE session_id = 'b1b2c3d4-0001-4000-8000-000000000001';
 
 -- ─── 9 Permanent Objects ────────────────────────────────────
 
-INSERT INTO objects (id, session_id, name, qr_code_id, physical_id, "order", description, is_final) VALUES
-('c1000000-0001-4000-8000-000000000001', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Scarabée de Bronze',    'QR-OBJ-01-KRTM', 'OBJ-01', 1, 'Un scarabée en résine bronze, symbole de protection et de renaissance', false),
-('c1000000-0002-4000-8000-000000000002', 'b1b2c3d4-0001-4000-8000-000000000001', 'La Fiole Ambrée',          'QR-OBJ-02-WFNL', 'OBJ-02', 2, 'Une petite fiole cylindrique en résine translucide couleur ambre', false),
-('c1000000-0003-4000-8000-000000000003', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Rouleau de Parchemin',  'QR-OBJ-03-PXVD', 'OBJ-03', 3, 'Un rouleau miniature en résine, comme un parchemin ancien enroulé', false),
-('c1000000-0004-4000-8000-000000000004', 'b1b2c3d4-0001-4000-8000-000000000001', 'L''Amulette d''Argile',    'QR-OBJ-04-HTJQ', 'OBJ-04', 4, 'Une amulette ovale en résine texturée imitant l''argile cuite', false),
-('c1000000-0005-4000-8000-000000000005', 'b1b2c3d4-0001-4000-8000-000000000001', 'La Clé Ancienne',          'QR-OBJ-05-BMGS', 'OBJ-05', 5, 'Une grande clé ancienne en résine, style médiéval avec anneau décoratif', false),
-('c1000000-0006-4000-8000-000000000006', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Sceau du Gardien',      'QR-OBJ-06-RLZN', 'OBJ-06', 6, 'Un sceau circulaire en résine avec motif géométrique gravé', false),
-('c1000000-0007-4000-8000-000000000007', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Fragment de Carte',     'QR-OBJ-07-YCAK', 'OBJ-07', 7, 'Un fragment de carte en résine avec reliefs de montagnes et chemins', false),
-('c1000000-0008-4000-8000-000000000008', 'b1b2c3d4-0001-4000-8000-000000000001', 'L''Urne Miniature',        'QR-OBJ-08-DXFP', 'OBJ-08', 8, 'Une petite urne grecque en résine avec motifs de vagues en relief', false),
-('c1000000-0009-4000-8000-000000000009', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Médaillon Final',       'QR-OBJ-09-MNQT', 'OBJ-09', 9, 'Un grand médaillon circulaire en résine dorée — le trésor ultime', true);
+INSERT INTO objects (id, session_id, name, qr_code_id, physical_id, "order", description, is_final, narrative_name) VALUES
+('c1000000-0001-4000-8000-000000000001', 'b1b2c3d4-0001-4000-8000-000000000001', 'La Fiole',        'QR-OBJ-01-KRTM', 'OBJ-01', 1, 'Une petite fiole cylindrique en résine translucide', false, 'La Fiole d''Huile Sacrée'),
+('c1000000-0002-4000-8000-000000000002', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Fragment',     'QR-OBJ-02-WFNL', 'OBJ-02', 2, 'Un fragment ancien en résine texturée', false, 'Le Fragment de Mosaïque Brisée'),
+('c1000000-0003-4000-8000-000000000003', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Sceau',        'QR-OBJ-03-PXVD', 'OBJ-03', 3, 'Un sceau circulaire en résine avec motif gravé', false, 'Le Sceau du Proconsul'),
+('c1000000-0004-4000-8000-000000000004', 'b1b2c3d4-0001-4000-8000-000000000001', 'La Clé',          'QR-OBJ-04-HTJQ', 'OBJ-04', 4, 'Une grande clé ancienne en résine avec anneau décoratif', false, 'La Clé du Sanctuaire'),
+('c1000000-0005-4000-8000-000000000005', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Parchemin',    'QR-OBJ-05-BMGS', 'OBJ-05', 5, 'Un rouleau miniature en résine, comme un parchemin ancien', false, 'Le Parchemin du Géographe'),
+('c1000000-0006-4000-8000-000000000006', 'b1b2c3d4-0001-4000-8000-000000000001', 'L''Amulette',     'QR-OBJ-06-RLZN', 'OBJ-06', 6, 'Une amulette ovale en résine texturée', false, 'L''Amulette de la Déesse Tanit'),
+('c1000000-0007-4000-8000-000000000007', 'b1b2c3d4-0001-4000-8000-000000000001', 'L''Urne',         'QR-OBJ-07-YCAK', 'OBJ-07', 7, 'Une petite urne grecque en résine avec motifs en relief', false, 'L''Urne des Cendres Oubliées'),
+('c1000000-0008-4000-8000-000000000008', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Médaillon',    'QR-OBJ-08-DXFP', 'OBJ-08', 8, 'Un médaillon circulaire en résine dorée', false, 'Le Médaillon du Dernier Gardien'),
+('c1000000-0009-4000-8000-000000000009', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Coffret',      'QR-OBJ-09-MNQT', 'OBJ-09', 9, 'Un coffret ancien en résine ornementée — le trésor ultime', true, 'Le Coffret des Secrets de Tarenti');
 
 -- ─── 9 Steps ────────────────────────────────────────────────
 

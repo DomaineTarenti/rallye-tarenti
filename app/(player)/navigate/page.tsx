@@ -30,7 +30,7 @@ export default function NavigatePage() {
   const targetLat = targetObject?.latitude ?? null;
   const targetLng = targetObject?.longitude ?? null;
   const hasGPS = targetLat != null && targetLng != null;
-  const objectName = targetObject?.name ?? "the next artifact";
+  const objectName = targetObject?.narrative_name || (targetObject?.name ?? "the next artifact");
   const objectDesc = targetObject?.description ?? "";
   const teamColor = teamCharacter?.color ?? "#7F77DD";
 

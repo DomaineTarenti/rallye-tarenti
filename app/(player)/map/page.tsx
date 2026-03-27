@@ -38,7 +38,7 @@ export default function MapPage() {
     const step = steps[stepIdx];
     if (!step) return `Chapter ${stepIdx + 1}`;
     const obj = objects.find((o) => o.id === step.object_id);
-    return obj?.name ?? `Chapter ${stepIdx + 1}`;
+    return obj?.narrative_name || (obj?.name ?? `Chapter ${stepIdx + 1}`);
   }
 
   function getStepStatus(idx: number): "completed" | "active" | "locked" {

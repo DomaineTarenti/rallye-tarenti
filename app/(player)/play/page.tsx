@@ -150,7 +150,7 @@ export default function PlayPage() {
 
   // Get current object name for scan context
   const currentObject = objects.find((o) => o.id === step.object_id);
-  const objectName = currentObject?.name ?? "the artifact";
+  const objectName = currentObject?.narrative_name || (currentObject?.name ?? "the artifact");
   const objectDesc = currentObject?.description ?? "";
 
   // Check if this is the first step and hasn't been scanned yet

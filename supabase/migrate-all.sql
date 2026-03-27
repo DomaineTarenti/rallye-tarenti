@@ -14,6 +14,7 @@ ALTER TABLE teams ADD COLUMN IF NOT EXISTS time_bonus integer DEFAULT 0;
 ALTER TABLE teams ADD COLUMN IF NOT EXISTS locked boolean DEFAULT false;
 ALTER TABLE staff_members ADD COLUMN IF NOT EXISTS validation_code text;
 ALTER TABLE staff_members ADD COLUMN IF NOT EXISTS teams_validated integer DEFAULT 0;
+ALTER TABLE objects ADD COLUMN IF NOT EXISTS narrative_name text;
 
 -- ─── Team messages table ────────────────────────────────────
 CREATE TABLE IF NOT EXISTS team_messages (

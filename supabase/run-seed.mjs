@@ -74,15 +74,15 @@ async function run() {
   // 5. Objects (9 permanent)
   console.log("5️⃣  Objects (9)");
   const objects = [
-    { id: "c1000000-0001-4000-8000-000000000001", name: "Le Scarabée de Bronze", qr_code_id: "QR-OBJ-01-KRTM", physical_id: "OBJ-01", order: 1, description: "Un scarabée en résine bronze", is_final: false },
-    { id: "c1000000-0002-4000-8000-000000000002", name: "La Fiole Ambrée", qr_code_id: "QR-OBJ-02-WFNL", physical_id: "OBJ-02", order: 2, description: "Une petite fiole cylindrique en résine ambre", is_final: false },
-    { id: "c1000000-0003-4000-8000-000000000003", name: "Le Rouleau de Parchemin", qr_code_id: "QR-OBJ-03-PXVD", physical_id: "OBJ-03", order: 3, description: "Un rouleau miniature en résine", is_final: false },
-    { id: "c1000000-0004-4000-8000-000000000004", name: "L'Amulette d'Argile", qr_code_id: "QR-OBJ-04-HTJQ", physical_id: "OBJ-04", order: 4, description: "Une amulette ovale en résine", is_final: false },
-    { id: "c1000000-0005-4000-8000-000000000005", name: "La Clé Ancienne", qr_code_id: "QR-OBJ-05-BMGS", physical_id: "OBJ-05", order: 5, description: "Une grande clé ancienne en résine", is_final: false },
-    { id: "c1000000-0006-4000-8000-000000000006", name: "Le Sceau du Gardien", qr_code_id: "QR-OBJ-06-RLZN", physical_id: "OBJ-06", order: 6, description: "Un sceau circulaire en résine", is_final: false },
-    { id: "c1000000-0007-4000-8000-000000000007", name: "Le Fragment de Carte", qr_code_id: "QR-OBJ-07-YCAK", physical_id: "OBJ-07", order: 7, description: "Un fragment de carte en résine", is_final: false },
-    { id: "c1000000-0008-4000-8000-000000000008", name: "L'Urne Miniature", qr_code_id: "QR-OBJ-08-DXFP", physical_id: "OBJ-08", order: 8, description: "Une petite urne grecque en résine", is_final: false },
-    { id: "c1000000-0009-4000-8000-000000000009", name: "Le Médaillon Final", qr_code_id: "QR-OBJ-09-MNQT", physical_id: "OBJ-09", order: 9, description: "Un grand médaillon en résine dorée", is_final: true },
+    { id: "c1000000-0001-4000-8000-000000000001", name: "La Fiole", qr_code_id: "QR-OBJ-01-KRTM", physical_id: "OBJ-01", order: 1, description: "Une petite fiole cylindrique en résine translucide", is_final: false, narrative_name: "La Fiole d'Huile Sacrée" },
+    { id: "c1000000-0002-4000-8000-000000000002", name: "Le Fragment", qr_code_id: "QR-OBJ-02-WFNL", physical_id: "OBJ-02", order: 2, description: "Un fragment ancien en résine texturée", is_final: false, narrative_name: "Le Fragment de Mosaïque Brisée" },
+    { id: "c1000000-0003-4000-8000-000000000003", name: "Le Sceau", qr_code_id: "QR-OBJ-03-PXVD", physical_id: "OBJ-03", order: 3, description: "Un sceau circulaire en résine avec motif gravé", is_final: false, narrative_name: "Le Sceau du Proconsul" },
+    { id: "c1000000-0004-4000-8000-000000000004", name: "La Clé", qr_code_id: "QR-OBJ-04-HTJQ", physical_id: "OBJ-04", order: 4, description: "Une grande clé ancienne en résine avec anneau décoratif", is_final: false, narrative_name: "La Clé du Sanctuaire" },
+    { id: "c1000000-0005-4000-8000-000000000005", name: "Le Parchemin", qr_code_id: "QR-OBJ-05-BMGS", physical_id: "OBJ-05", order: 5, description: "Un rouleau miniature en résine, comme un parchemin ancien", is_final: false, narrative_name: "Le Parchemin du Géographe" },
+    { id: "c1000000-0006-4000-8000-000000000006", name: "L'Amulette", qr_code_id: "QR-OBJ-06-RLZN", physical_id: "OBJ-06", order: 6, description: "Une amulette ovale en résine texturée", is_final: false, narrative_name: "L'Amulette de la Déesse Tanit" },
+    { id: "c1000000-0007-4000-8000-000000000007", name: "L'Urne", qr_code_id: "QR-OBJ-07-YCAK", physical_id: "OBJ-07", order: 7, description: "Une petite urne grecque en résine avec motifs en relief", is_final: false, narrative_name: "L'Urne des Cendres Oubliées" },
+    { id: "c1000000-0008-4000-8000-000000000008", name: "Le Médaillon", qr_code_id: "QR-OBJ-08-DXFP", physical_id: "OBJ-08", order: 8, description: "Un médaillon circulaire en résine dorée", is_final: false, narrative_name: "Le Médaillon du Dernier Gardien" },
+    { id: "c1000000-0009-4000-8000-000000000009", name: "Le Coffret", qr_code_id: "QR-OBJ-09-MNQT", physical_id: "OBJ-09", order: 9, description: "Un coffret ancien en résine ornementée — le trésor ultime", is_final: true, narrative_name: "Le Coffret des Secrets de Tarenti" },
   ];
   for (const obj of objects) {
     await upsert("objects", { ...obj, session_id: SESSION_ID });

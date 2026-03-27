@@ -39,6 +39,7 @@ export interface QuestObject {
   longitude: number | null;
   is_final: boolean;
   physical_id: string | null;
+  narrative_name: string | null;
   created_at: string;
 }
 

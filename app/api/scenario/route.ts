@@ -21,19 +21,25 @@ Generate a complete scenario for a treasure hunt with the following parameters:
 - Number of stages: ${num_steps || 5}
 - Additional context: ${context || "None"}
 
+The 9 permanent base objects are (in order):
+1. La Fiole, 2. Le Fragment, 3. Le Sceau, 4. La Clé, 5. Le Parchemin,
+6. L'Amulette, 7. L'Urne, 8. Le Médaillon, 9. Le Coffret (final treasure)
+
 For each stage, provide:
-1. object_name: A dramatic, thematic name for the physical object (in French)
-2. object_description: A short description of the physical object (1 sentence, in French)
-3. type: "enigme" for most, "epreuve" for 1 physical challenge
-4. text_narratif: An immersive narrative text (3-4 sentences in French, rich and atmospheric)
-5. enigme: The riddle or challenge description (in French)
-6. answer: The answer (single word or short phrase, lowercase, in French). Null for "epreuve" type.
+1. object_name: The base name from the list above (keep as-is)
+2. narrative_name: An immersive narrative name based on the theme (e.g. "La Fiole d'Huile Sacrée" for a Mediterranean theme). Must start with the base name.
+3. object_description: A short description of the physical object (1 sentence, in French)
+4. type: "enigme" for most, "epreuve" for 1 physical challenge
+5. text_narratif: An immersive narrative text (3-4 sentences in French, rich and atmospheric)
+6. enigme: The riddle or challenge description (in French)
+7. answer: The answer (single word or short phrase, lowercase, in French). Null for "epreuve" type.
 
 Return ONLY valid JSON in this exact format:
 {
   "stages": [
     {
       "object_name": "...",
+      "narrative_name": "...",
       "object_description": "...",
       "type": "enigme",
       "text_narratif": "...",
