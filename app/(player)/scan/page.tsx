@@ -17,7 +17,10 @@ import type { ApiResponse, ScanResult } from "@/lib/types";
 export default function ScanPage() {
   const router = useRouter();
 
-  // Read store values reactively for display
+  // Subscribe to hydration flag + display values
+  const hasHydrated = usePlayerStore((s) => s._hasHydrated);
+  const team = usePlayerStore((s) => s.team);
+  const session = usePlayerStore((s) => s.session);
   const currentStep = usePlayerStore((s) => s.currentStep);
   const objects = usePlayerStore((s) => s.objects);
   const setCurrentStep = usePlayerStore((s) => s.setCurrentStep);
@@ -33,15 +36,17 @@ export default function ScanPage() {
   const scannerRef = useRef<HTMLDivElement>(null);
   const processingRef = useRef(false);
 
-  // Wait for hydration — check store has team + session
+  // Wait for Zustand to hydrate from localStorage, THEN check team/session
   useEffect(() => {
-    const state = usePlayerStore.getState();
-    if (!state.team || !state.session) {
+    if (!hasHydrated) return; // still loading from localStorage
+    if (!team || !session) {
+      console.log("[SCAN PAGE] No team/session after hydration, redirecting home");
       router.replace("/");
       return;
     }
+    console.log("[SCAN PAGE] Ready — team:", team.name, "session:", session.name);
     setReady(true);
-  }, [router]);
+  }, [hasHydrated, team, session, router]);
 
   // Get current object info for display
   const currentObject = currentStep ? objects.find((o) => o.id === currentStep.object_id) : null;
@@ -52,10 +57,16 @@ export default function ScanPage() {
     async (qrCodeId: string) => {
       if (processingRef.current) return;
 
-      // Read fresh state at scan time — avoids stale closure
-      const { team, session } = usePlayerStore.getState();
-      if (!team || !session) {
-        router.replace("/");
+      // Read fresh state at scan time
+      const state = usePlayerStore.getState();
+      const t = state.team;
+      const s = state.session;
+
+      console.log("[SCAN FRONT] team:", t?.id, "session:", s?.id, "qr_code:", qrCodeId);
+
+      if (!t || !s) {
+        console.error("[SCAN FRONT] No team/session in store at scan time");
+        setScanResult({ valid: false, reason: "unknown", message: "Session expired. Please rejoin." });
         return;
       }
 
@@ -68,31 +79,30 @@ export default function ScanPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             qr_code_id: qrCodeId,
-            team_id: team.id,
-            session_id: session.id,
+            team_id: t.id,
+            session_id: s.id,
           }),
         });
+
         const json: ApiResponse<ScanResult> = await res.json();
+        console.log("[SCAN FRONT] API response:", JSON.stringify(json));
+
         const result = json.data;
 
         if (!result) {
           setScanResult({ valid: false, reason: "unknown", message: json.error ?? "Server communication error." });
-          processingRef.current = false;
-          setProcessing(false);
-          return;
+        } else {
+          setScanResult(result);
+
+          if (result.valid && result.step) {
+            setCurrentStep(result.step);
+            setTimeout(() => router.push("/play"), 1500);
+          }
         }
-
-        setScanResult(result);
-
-        if (result.valid && result.step) {
-          setCurrentStep(result.step);
-          setTimeout(() => router.push("/play"), 1500);
-        }
-
-        processingRef.current = false;
-        setProcessing(false);
-      } catch {
+      } catch (err) {
+        console.error("[SCAN FRONT] Fetch error:", err);
         setScanResult({ valid: false, reason: "unknown", message: "Connection error. Check your network." });
+      } finally {
         processingRef.current = false;
         setProcessing(false);
       }
@@ -141,6 +151,7 @@ export default function ScanPage() {
     };
   }, [ready, manualMode, scanResult, processScan]);
 
+  // Loading state while waiting for hydration
   if (!ready) {
     return (
       <main className="flex min-h-[100dvh] items-center justify-center bg-deep">
@@ -268,13 +279,13 @@ export default function ScanPage() {
           <Card className="mb-6 w-full max-w-sm bg-surface">
             <h2 className="mb-1 text-center font-bold">Enter Staff Code</h2>
             <p className="mb-4 text-center text-sm text-gray-400">
-              Enter the 4-digit code from a Curator
+              Enter the object code or staff code
             </p>
             <div className="flex gap-2">
               <Input
                 value={manualCode}
                 onChange={(e) => setManualCode(e.target.value.toUpperCase())}
-                placeholder="0000"
+                placeholder="OBJ-01"
                 maxLength={20}
                 className="bg-deep text-center font-mono tracking-widest"
               />
