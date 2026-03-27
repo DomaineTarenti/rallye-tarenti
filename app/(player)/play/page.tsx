@@ -123,8 +123,9 @@ export default function PlayPage() {
         const stepsList = d.steps as Step[];
         const active = prog.find((p) => p.status === "active");
         if (active) {
-          const s = stepsList.find((s) => s.id === active.step_id);
-          if (s) { setCurrentStep(s); setCurrentStepIndex(stepsList.indexOf(s)); }
+          const idx = stepsList.findIndex((s) => s.id === active.step_id);
+          if (idx >= 0) setCurrentStepIndex(idx);
+          // Don't auto-set currentStep — it's set by scanning
         }
         // Load collected letters from team
         if (d.team && (d.team as Record<string, unknown>).collected_letters) {
@@ -146,7 +147,7 @@ export default function PlayPage() {
 
   // Quest complete
   const allComplete = steps.length > 0 && !progress.find((p) => p.status === "active" || p.status === "locked");
-  if (allComplete) {
+  if (allComplete && !currentStep) {
     return (
       <main className="flex min-h-[100dvh] flex-col items-center justify-center px-6 pb-6">
         <Trophy className="mb-4 h-16 w-16 text-amber" />
@@ -163,7 +164,7 @@ export default function PlayPage() {
     );
   }
 
-  if (loadingGame || !currentStep) {
+  if (loadingGame) {
     return (
       <main className="flex min-h-[100dvh] flex-col pb-6">
         <div className="border-b border-white/5 bg-deep/95 px-4 py-3">
@@ -181,23 +182,11 @@ export default function PlayPage() {
     );
   }
 
-  const step = currentStep;
-  const enigmaType = getEnigmaInputType(step);
-  const teamColor = teamCharacter?.color ?? "#7F77DD";
-  const initials = team.name.slice(0, 2).toUpperCase();
-
-  // Get current object name for scan context
-  const currentObject = objects.find((o) => o.id === step.object_id);
-  const objectName = currentObject?.narrative_name || (currentObject?.name ?? "the artifact");
-  const objectDesc = currentObject?.description ?? "";
-
-  // Check if this is the first step and hasn't been scanned yet
-  const currentProgress = progress.find((p) => p.step_id === step.id);
-  const isFirstStep = currentStepIndex === 0 && currentProgress?.status === "active";
-
-  // Show intro screen on first step (before any scanning)
-  const hasIntro = session.intro_text && isFirstStep && !introDismissed;
-  if (hasIntro) {
+  // Show intro screen on first step before any scanning
+  const completedAny = progress.some((p) => p.status === "completed");
+  const showIntro = session.intro_text && currentStepIndex === 0 && !completedAny && !introDismissed;
+  if (showIntro) {
+    const teamColor = teamCharacter?.color ?? "#7F77DD";
     return (
       <main className="flex min-h-[100dvh] flex-col bg-deep">
         <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
@@ -207,7 +196,7 @@ export default function PlayPage() {
             <p className="text-sm italic leading-relaxed text-gray-300">{session.intro_text}</p>
           </Card>
           {session.intro_enigme && (
-            <Card className="mb-6 w-full max-w-sm bg-surface">
+            <Card className={`mb-6 w-full max-w-sm bg-surface ${shaking ? "animate-shake" : ""}`}>
               <span className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">First Riddle</span>
               <p className="mb-3 font-medium text-white">{session.intro_enigme}</p>
               <div className="flex gap-2">
@@ -223,6 +212,7 @@ export default function PlayPage() {
                       if (session.intro_answer && normalize(answer) === normalize(session.intro_answer)) {
                         setIntroDismissed(true);
                         setAnswer("");
+                        setFeedback(null);
                       } else {
                         setFeedback({ type: "error", msg: "Not quite... try again!" });
                         setShaking(true);
@@ -252,7 +242,7 @@ export default function PlayPage() {
                 </Button>
               </div>
               {feedback && (
-                <p className={`mt-2 text-sm ${feedback.type === "error" ? "text-red-400" : "text-blue-400"}`}>{feedback.msg}</p>
+                <p className={`mt-2 text-sm ${feedback.type === "error" ? "text-red-400" : "text-green-400"}`}>{feedback.msg}</p>
               )}
             </Card>
           )}
@@ -265,6 +255,24 @@ export default function PlayPage() {
       </main>
     );
   }
+
+  // No current step — player needs to scan the next object first
+  if (!currentStep) {
+    router.replace("/navigate");
+    return null;
+  }
+
+  const step = currentStep;
+  const enigmaType = getEnigmaInputType(step);
+  const teamColor = teamCharacter?.color ?? "#7F77DD";
+  const initials = team.name.slice(0, 2).toUpperCase();
+
+  // Get current object name for scan context
+  const currentObject = objects.find((o) => o.id === step.object_id);
+  const objectName = currentObject?.narrative_name || (currentObject?.name ?? "the artifact");
+  const objectDesc = currentObject?.description ?? "";
+
+  const currentProgress = progress.find((p) => p.step_id === step.id);
 
   async function handleSubmitAnswer() {
     if (!answer.trim() || submitting) return;

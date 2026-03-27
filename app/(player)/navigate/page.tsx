@@ -23,8 +23,10 @@ export default function NavigatePage() {
   const [showPhoto, setShowPhoto] = useState(false);
   const watchRef = useRef<number | null>(null);
 
-  const targetObject = currentStep
-    ? objects.find((o) => o.id === currentStep.object_id)
+  // Find the target object — use currentStep if set (scanned), otherwise use steps[currentStepIndex]
+  const nextStep = currentStep ?? steps[currentStepIndex] ?? null;
+  const targetObject = nextStep
+    ? objects.find((o) => o.id === nextStep.object_id)
     : null;
 
   const targetLat = targetObject?.latitude ?? null;

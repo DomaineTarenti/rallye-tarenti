@@ -89,8 +89,8 @@ export default function CelebratePage() {
     if (isLastStep) {
       router.push("/unlock");
     } else {
-      advanceStep();
-      router.push("/map");
+      advanceStep(); // advances index, clears currentStep
+      router.push("/navigate"); // go find the next object
     }
   }
 

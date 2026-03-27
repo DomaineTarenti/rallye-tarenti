@@ -237,7 +237,7 @@ export default function CharacterPage() {
         </label>
 
         <Button
-          onClick={() => router.push("/play")}
+          onClick={() => router.push("/navigate")}
           size="lg"
           className="w-full max-w-xs"
           disabled={!codeNoted}

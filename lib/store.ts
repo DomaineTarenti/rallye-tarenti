@@ -91,8 +91,8 @@ export const usePlayerStore = create<PlayerState>()(
         if (next < steps.length) {
           set({
             currentStepIndex: next,
-            currentStep: steps[next],
-            stepStartTime: Date.now(),
+            currentStep: null, // cleared — player must scan the next object
+            stepStartTime: 0,
             currentStepScore: 0,
           });
         }
