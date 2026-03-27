@@ -50,17 +50,23 @@ function LoginContent() {
         return;
       }
 
-      // 2. Find staff member by name in this session
+      // 2. Find staff member by name in this session (partial match)
       const { data: staffMembers } = await supabase
         .from("staff_members")
         .select("*")
         .eq("session_id", session.id)
-        .ilike("name", staffName.trim());
+        .ilike("name", `%${staffName.trim()}%`);
 
       const member = staffMembers?.[0];
 
       if (!member) {
-        setError("You are not registered for this session. Contact the organiser.");
+        // Show available names to help
+        const { data: allStaff } = await supabase
+          .from("staff_members")
+          .select("name")
+          .eq("session_id", session.id);
+        const names = (allStaff ?? []).map((s) => s.name).join(", ");
+        setError(`Not found. Available: ${names || "none"}`);
         setLoading(false);
         return;
       }
