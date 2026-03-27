@@ -14,6 +14,8 @@ import {
   CheckCircle2,
   FileEdit,
   Trash2,
+  X,
+  AlertTriangle,
 } from "lucide-react";
 import { Loader } from "@/components/shared";
 import type { ApiResponse, Session } from "@/lib/types";
@@ -54,27 +56,35 @@ export default function AdminDashboard() {
     load();
   }, []);
 
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  async function deleteSession(id: string, name: string) {
-    if (!confirm(`Delete "${name}"?\n\nThis is irreversible. All teams and progress will be deleted.`)) return;
-    setDeleting(id);
+  async function executeDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError(null);
+    console.log("[DELETE] Starting delete for:", deleteTarget.id, deleteTarget.name);
     try {
-      const res = await fetch(`/api/session?id=${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/session?id=${deleteTarget.id}`, { method: "DELETE" });
+      console.log("[DELETE] Response status:", res.status);
       const json: ApiResponse = await res.json();
+      console.log("[DELETE] Response body:", json);
       if (!res.ok || json.error) {
-        alert(`Delete failed: ${json.error ?? "Unknown error"}`);
-        setDeleting(null);
+        setDeleteError(json.error ?? `Server returned ${res.status}`);
+        setDeleting(false);
         return;
       }
-      // Refetch from server
+      // Success — refetch list
+      setDeleteTarget(null);
       const reload = await fetch("/api/session?all=true");
       const reloadJson: ApiResponse = await reload.json();
       if (reloadJson.data) setSessions(reloadJson.data as SessionWithCount[]);
     } catch (e) {
-      alert(`Network error: ${e instanceof Error ? e.message : "Check connection"}`);
+      console.error("[DELETE] Error:", e);
+      setDeleteError(e instanceof Error ? e.message : "Network error");
     }
-    setDeleting(null);
+    setDeleting(false);
   }
 
   const activeSessions = sessions.filter((s) => s.status === "active");
@@ -225,7 +235,8 @@ export default function AdminDashboard() {
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
-                          deleteSession(session.id, session.name);
+                          setDeleteTarget({ id: session.id, name: session.name });
+                          setDeleteError(null);
                         }}
                         title="Delete session"
                         className="rounded-lg p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500"
@@ -242,6 +253,50 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !deleting && setDeleteTarget(null)}>
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Delete session?</h3>
+                <p className="text-sm text-gray-500">{deleteTarget.name}</p>
+              </div>
+            </div>
+
+            <p className="mb-4 text-sm text-gray-500">
+              This is irreversible. All teams, progress, and data for this session will be permanently deleted.
+            </p>
+
+            {deleteError && (
+              <div className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+                className="flex-1 rounded-lg border border-gray-300 bg-white py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeDelete}
+                disabled={deleting}
+                className="flex-1 rounded-lg bg-red-600 py-2.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? "Deleting..." : "Delete permanently"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
