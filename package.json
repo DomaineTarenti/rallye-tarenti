@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:seed": "node supabase/run-seed.mjs",
+    "db:sql": "node supabase/db-execute.mjs",
+    "db:pending": "node supabase/db-execute.mjs --pending",
+    "db:all": "node supabase/db-execute.mjs --all"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
