@@ -4,7 +4,7 @@ import type { ApiResponse } from "@/lib/types";
 
 // POST /api/admin/message — send a message to a team
 export async function POST(req: NextRequest) {
-  const { team_id, session_id, message } = await req.json();
+  const { team_id, session_id, message, type } = await req.json();
 
   if (!team_id || !message?.trim()) {
     return NextResponse.json<ApiResponse>(
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await supabase
     .from("team_messages")
-    .insert({ team_id, session_id: session_id ?? null, message: message.trim() })
+    .insert({ team_id, session_id: session_id ?? null, message: message.trim(), type: type ?? "message" })
     .select()
     .single();
 

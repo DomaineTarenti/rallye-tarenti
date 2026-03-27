@@ -54,17 +54,27 @@ export default function AdminDashboard() {
     load();
   }, []);
 
+  const [deleting, setDeleting] = useState<string | null>(null);
+
   async function deleteSession(id: string, name: string) {
-    if (!confirm(`Delete "${name}"? This is irreversible. All teams and progress will be deleted.`)) return;
+    if (!confirm(`Delete "${name}"?\n\nThis is irreversible. All teams and progress will be deleted.`)) return;
+    setDeleting(id);
     try {
       const res = await fetch(`/api/session?id=${id}`, { method: "DELETE" });
-      const json = await res.json();
-      if (json.error) { alert(json.error); return; }
-      // Refetch from API to ensure persistence
+      const json: ApiResponse = await res.json();
+      if (!res.ok || json.error) {
+        alert(`Delete failed: ${json.error ?? "Unknown error"}`);
+        setDeleting(null);
+        return;
+      }
+      // Refetch from server
       const reload = await fetch("/api/session?all=true");
       const reloadJson: ApiResponse = await reload.json();
       if (reloadJson.data) setSessions(reloadJson.data as SessionWithCount[]);
-    } catch { /* silent */ }
+    } catch (e) {
+      alert(`Network error: ${e instanceof Error ? e.message : "Check connection"}`);
+    }
+    setDeleting(null);
   }
 
   const activeSessions = sessions.filter((s) => s.status === "active");

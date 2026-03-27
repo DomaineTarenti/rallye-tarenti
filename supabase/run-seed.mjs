@@ -71,56 +71,52 @@ async function run() {
   console.log("4️⃣  Cleaning old objects...");
   await supabase.from("objects").delete().eq("session_id", SESSION_ID);
 
-  // 5. Objects
-  console.log("5️⃣  Objects (10)");
+  // 5. Objects (9 permanent)
+  console.log("5️⃣  Objects (9)");
   const objects = [
-    { id: "c1000000-0001-4000-8000-000000000001", name: "Le Scarabée de Bronze", qr_code_id: "QR-TAR-001", order: 1, description: "Un scarabée en bronze patiné" },
-    { id: "c1000000-0002-4000-8000-000000000002", name: "La Fiole Ambrée", qr_code_id: "QR-TAR-002", order: 2, description: "Une fiole de verre ambré" },
-    { id: "c1000000-0003-4000-8000-000000000003", name: "Le Parchemin Scellé", qr_code_id: "QR-TAR-003", order: 3, description: "Un parchemin scellé à la cire rouge" },
-    { id: "c1000000-0004-4000-8000-000000000004", name: "L'Amulette d'Argile", qr_code_id: "QR-TAR-004", order: 4, description: "Une amulette d'argile en spirale" },
-    { id: "c1000000-0005-4000-8000-000000000005", name: "Le Miroir de Sel", qr_code_id: "QR-TAR-005", order: 5, description: "Un disque de sel cristallisé" },
-    { id: "c1000000-0006-4000-8000-000000000006", name: "La Clé de Cuivre", qr_code_id: "QR-TAR-006", order: 6, description: "Une clé ornementale en cuivre" },
-    { id: "c1000000-0007-4000-8000-000000000007", name: "Le Sceau du Gardien", qr_code_id: "QR-TAR-007", order: 7, description: "Un sceau de cire à l'olivier" },
-    { id: "c1000000-0008-4000-8000-000000000008", name: "La Carte Déchirée", qr_code_id: "QR-TAR-008", order: 8, description: "Un fragment de carte ancienne" },
-    { id: "c1000000-0009-4000-8000-000000000009", name: "L'Urne Brisée", qr_code_id: "QR-TAR-009", order: 9, description: "Fragments d'urne noircie par le feu" },
-    { id: "c1000000-0010-4000-8000-000000000010", name: "Le Médaillon Final", qr_code_id: "QR-TAR-010", order: 10, description: "Un médaillon de cuivre au soleil levant" },
+    { id: "c1000000-0001-4000-8000-000000000001", name: "Le Scarabée de Bronze", qr_code_id: "QR-OBJ-01-KRTM", physical_id: "OBJ-01", order: 1, description: "Un scarabée en résine bronze", is_final: false },
+    { id: "c1000000-0002-4000-8000-000000000002", name: "La Fiole Ambrée", qr_code_id: "QR-OBJ-02-WFNL", physical_id: "OBJ-02", order: 2, description: "Une petite fiole cylindrique en résine ambre", is_final: false },
+    { id: "c1000000-0003-4000-8000-000000000003", name: "Le Rouleau de Parchemin", qr_code_id: "QR-OBJ-03-PXVD", physical_id: "OBJ-03", order: 3, description: "Un rouleau miniature en résine", is_final: false },
+    { id: "c1000000-0004-4000-8000-000000000004", name: "L'Amulette d'Argile", qr_code_id: "QR-OBJ-04-HTJQ", physical_id: "OBJ-04", order: 4, description: "Une amulette ovale en résine", is_final: false },
+    { id: "c1000000-0005-4000-8000-000000000005", name: "La Clé Ancienne", qr_code_id: "QR-OBJ-05-BMGS", physical_id: "OBJ-05", order: 5, description: "Une grande clé ancienne en résine", is_final: false },
+    { id: "c1000000-0006-4000-8000-000000000006", name: "Le Sceau du Gardien", qr_code_id: "QR-OBJ-06-RLZN", physical_id: "OBJ-06", order: 6, description: "Un sceau circulaire en résine", is_final: false },
+    { id: "c1000000-0007-4000-8000-000000000007", name: "Le Fragment de Carte", qr_code_id: "QR-OBJ-07-YCAK", physical_id: "OBJ-07", order: 7, description: "Un fragment de carte en résine", is_final: false },
+    { id: "c1000000-0008-4000-8000-000000000008", name: "L'Urne Miniature", qr_code_id: "QR-OBJ-08-DXFP", physical_id: "OBJ-08", order: 8, description: "Une petite urne grecque en résine", is_final: false },
+    { id: "c1000000-0009-4000-8000-000000000009", name: "Le Médaillon Final", qr_code_id: "QR-OBJ-09-MNQT", physical_id: "OBJ-09", order: 9, description: "Un grand médaillon en résine dorée", is_final: true },
   ];
   for (const obj of objects) {
     await upsert("objects", { ...obj, session_id: SESSION_ID });
   }
 
   // 6. Steps
-  console.log("6️⃣  Steps (10)");
+  console.log("6️⃣  Steps (9)");
   const steps = [
     { id: "d1000000-0001-4000-8000-000000000001", object_id: objects[0].id, type: "enigme", order: 1, answer: "olivier",
-      text_narratif: "Les dernières lueurs du crépuscule embrasent les collines du Domaine Tarenti...",
+      text_narratif: "Un scarabée de bronze gît dans la terre ocre. L'inscription dit: écoute l'arbre qui nourrit cette terre.",
       enigme: "Je suis l'arbre sacré de la Méditerranée. Mon fruit donne une huile d'or. Quel est mon nom ?" },
     { id: "d1000000-0002-4000-8000-000000000002", object_id: objects[1].id, type: "enigme", order: 2, answer: "pierre",
-      text_narratif: "L'huile de l'olivier ancien vous a guidé jusqu'à une alcôve dissimulée...",
-      enigme: "Les Romains m'ont taillée pour bâtir leurs temples. Je suis le socle de toute civilisation. Que suis-je ?" },
-    { id: "d1000000-0003-4000-8000-000000000003", object_id: objects[2].id, type: "epreuve", order: 3, answer: null,
-      text_narratif: "Le parchemin craque sous vos doigts...",
-      enigme: "Le Gardien de Tarenti vous met à l'épreuve physique." },
-    { id: "d1000000-0004-4000-8000-000000000004", object_id: objects[3].id, type: "enigme", order: 4, answer: "source",
-      text_narratif: "Le Gardien hoche la tête avec un sourire grave...",
+      text_narratif: "Une fiole ambrée sur un socle de marbre. Un bâtisseur oublié érigea les premiers murs de Tarenti.",
+      enigme: "Les Romains m'ont taillée pour bâtir leurs temples. Que suis-je ?" },
+    { id: "d1000000-0003-4000-8000-000000000003", object_id: objects[2].id, type: "enigme", order: 3, answer: "source",
+      text_narratif: "Le parchemin dit: là où l'eau murmure les secrets que la terre a oubliés.",
       enigme: "Je jaillis de la roche. Je suis le commencement de tout fleuve. Que suis-je ?" },
-    { id: "d1000000-0005-4000-8000-000000000005", object_id: objects[4].id, type: "enigme", order: 5, answer: "sel",
-      text_narratif: "La source vous a conduit vers la côte...",
+    { id: "d1000000-0004-4000-8000-000000000004", object_id: objects[3].id, type: "enigme", order: 4, answer: "sel",
+      text_narratif: "L'amulette d'argile pulse sous la lumière. Blanc comme la neige mais né de la mer.",
       enigme: "Je suis blanc mais né de la mer. Mon nom ne contient que trois lettres. Qui suis-je ?" },
-    { id: "d1000000-0006-4000-8000-000000000006", object_id: objects[5].id, type: "enigme", order: 6, answer: "1453",
-      text_narratif: "Le sel vous a mené vers une porte de bois vermoulu...",
-      enigme: "Entrez l'année de la chute de Constantinople." },
-    { id: "d1000000-0007-4000-8000-000000000007", object_id: objects[6].id, type: "epreuve", order: 7, answer: null,
-      text_narratif: "La porte s'ouvre sur une salle voûtée baignée de lumière dorée...",
-      enigme: "Le Second Gardien attend votre fellowship pour une épreuve de cohésion." },
-    { id: "d1000000-0008-4000-8000-000000000008", object_id: objects[7].id, type: "enigme", order: 8, answer: "Les Grecs de Sparte",
-      text_narratif: "Le Gardien vous remet un fragment de carte ancienne...",
+    { id: "d1000000-0005-4000-8000-000000000005", object_id: objects[4].id, type: "epreuve", order: 5, answer: null,
+      text_narratif: "La clé attend devant une porte. Le Gardien dit: prouvez votre vaillance.",
+      enigme: "Le Premier Gardien vous met à l'épreuve physique." },
+    { id: "d1000000-0006-4000-8000-000000000006", object_id: objects[5].id, type: "epreuve", order: 6, answer: null,
+      text_narratif: "Le sceau de l'olivier brille. Le Second Gardien attend votre épreuve de cohésion.",
+      enigme: "Le Second Gardien vous attend. Votre fellowship entière doit participer." },
+    { id: "d1000000-0007-4000-8000-000000000007", object_id: objects[6].id, type: "enigme", order: 7, answer: "Les Grecs de Sparte",
+      text_narratif: "Un fragment de carte sur peau de chèvre. Les chemins convergent vers une étoile.",
       enigme: "Quelle civilisation a fondé Tarente au VIIIe siècle av. J.-C. ?|Les Grecs de Sparte|Les Romains|Les Phéniciens|Les Étrusques" },
-    { id: "d1000000-0009-4000-8000-000000000009", object_id: objects[8].id, type: "enigme", order: 9, answer: "feu",
-      text_narratif: "La carte vous guide vers les ruines d'un ancien four à céramique...",
-      enigme: "Je danse sans jambes, je dévore sans bouche. Les potiers me vénéraient. Quel est mon nom ?" },
-    { id: "d1000000-0010-4000-8000-000000000010", object_id: objects[9].id, type: "enigme", order: 10, answer: "tarenti",
-      text_narratif: "Le feu vous a montré le chemin vers le cœur même du domaine...",
+    { id: "d1000000-0008-4000-8000-000000000008", object_id: objects[7].id, type: "enigme", order: 8, answer: "feu",
+      text_narratif: "Les ruines d'un four noirci. Les potiers vénéraient cet élément sacré.",
+      enigme: "Je danse sans jambes, je dévore sans bouche. Quel est mon nom ?" },
+    { id: "d1000000-0009-4000-8000-000000000009", object_id: objects[8].id, type: "enigme", order: 9, answer: "tarenti",
+      text_narratif: "Au fond d'une vasque moussue, un médaillon de cuivre. La dernière inscription: le nom de cette terre.",
       enigme: "Je suis le domaine, le mystère, la réponse finale. Prononcez mon nom." },
   ];
   for (const step of steps) {
@@ -131,8 +127,8 @@ async function run() {
   console.log("7️⃣  Staff");
   await supabase.from("staff_members").delete().eq("session_id", SESSION_ID);
   await supabase.from("staff_members").insert([
-    { session_id: SESSION_ID, name: "Le Premier Gardien", role: "gardien", assigned_step_id: steps[2].id },
-    { session_id: SESSION_ID, name: "Le Second Gardien", role: "gardien", assigned_step_id: steps[6].id },
+    { session_id: SESSION_ID, name: "Le Premier Gardien", role: "gardien", assigned_step_id: steps[4].id, validation_code: "4721" },
+    { session_id: SESSION_ID, name: "Le Second Gardien", role: "gardien", assigned_step_id: steps[5].id, validation_code: "8356" },
   ]);
   console.log("  ✅ staff_members: 2 rows");
 
@@ -143,7 +139,7 @@ async function run() {
     console.log(`  ✅ ${t}: ${data?.length ?? 0} row(s)`);
   }
 
-  console.log("\n🎉 Seed complete! Access Key: TARENTI24 (10 stages)\n");
+  console.log("\n🎉 Seed complete! Access Key: TARENTI24 (9 stages)\n");
 }
 
 run().catch(console.error);

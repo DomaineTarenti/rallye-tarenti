@@ -51,6 +51,8 @@ export default function LiveDashboard() {
   const [unlockModal, setUnlockModal] = useState<{ teamId: string; teamName: string } | null>(null);
   const [unlockStepId, setUnlockStepId] = useState("");
   const [timeAdded, setTimeAdded] = useState<string | null>(null);
+  const [helpAlert, setHelpAlert] = useState<{ teamName: string; step: number; message: string } | null>(null);
+  const [helpTeamId, setHelpTeamId] = useState<string | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -92,6 +94,18 @@ export default function LiveDashboard() {
     const ch = supabase.channel(`live-${sessionId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "team_progress" }, debouncedReload)
       .on("postgres_changes", { event: "*", schema: "public", table: "teams" }, debouncedReload)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "team_messages" }, (payload) => {
+        const msg = payload.new as { message: string; type?: string; team_id?: string };
+        if (msg.type === "help_request") {
+          setHelpAlert({ teamName: "", step: 0, message: msg.message });
+          setHelpTeamId(msg.team_id ?? null);
+          // Sound notification
+          try { new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1saWBnbXV3dnZxbW5ydHRxbnF0d3d0cG1vc3Z3dHBtb3N2d3RxbnF1eHd0cXF0eHl3dHJ0eHp5d3V1eXt6eHZ2eXt7eXd2eHp7end3eHp7e3p4eHp8fHt5eXt8fXt6ent9fn18e3x+f359fH1/gH9+fX6AgYB/fn+BgoGAf4CBgoKBgIGCg4OCgYKDhIOCgoOEhYSDg4SFhoWEhIWGh4aFhYaHiIeGhoeIiYiHh4iJioqJiImKi4uKiYqLjIyLiouMjY2Mi4yNjo6NjI2Oj4+OjY6PkJCPjo+QkZGQj5CRkpKRkJGSk5OSkZKTlJSTkpOU").play().catch(() => {}); } catch { /* no audio */ }
+          // Change tab title
+          document.title = "\u{1F198} The Quest — Help needed!";
+          setTimeout(() => { document.title = "The Quest Admin"; setHelpAlert(null); setHelpTeamId(null); }, 15000);
+        }
+      })
       .subscribe();
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); supabase.removeChannel(ch); };
   }, [sessionId, debouncedReload]);
@@ -163,6 +177,15 @@ export default function LiveDashboard() {
 
   return (
     <div className="p-6 lg:p-8">
+      {/* Help request alert */}
+      {helpAlert && (
+        <div className="fixed left-4 right-4 top-4 z-50 flex items-center gap-3 rounded-xl bg-red-600 px-4 py-3 text-white shadow-xl" onClick={() => setHelpAlert(null)}>
+          <span className="text-lg">{"\u{1F198}"}</span>
+          <p className="flex-1 text-sm font-medium">{helpAlert.message}</p>
+          <button className="text-white/70 hover:text-white"><X className="h-4 w-4" /></button>
+        </div>
+      )}
+
       <div className="mx-auto max-w-5xl">
         {/* Header */}
         <div className="mb-6 flex items-start justify-between gap-4">
@@ -232,7 +255,7 @@ export default function LiveDashboard() {
                     const stuck = team.status === "playing" && team.hints_used > 2;
 
                     return (
-                      <tr key={team.id} className={`border-b border-gray-50 ${stuck ? "bg-amber-50/50" : ""}`}>
+                      <tr key={team.id} className={`border-b border-gray-50 ${helpTeamId === team.id ? "bg-red-50 animate-pulse" : stuck ? "bg-amber-50/50" : ""}`}>
                         <td className="px-4 py-3 font-bold text-gray-400">{i + 1}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">

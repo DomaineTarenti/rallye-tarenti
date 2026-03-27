@@ -22,6 +22,12 @@ export default function ScanPage() {
   const objects = usePlayerStore((s) => s.objects);
   const setCurrentStep = usePlayerStore((s) => s.setCurrentStep);
 
+  // Guard: redirect if store is empty
+  if (!team || !session) {
+    if (typeof window !== "undefined") router.replace("/");
+    return null;
+  }
+
   // Get current object info for context
   const currentObject = currentStep ? objects.find((o) => o.id === currentStep.object_id) : null;
   const objectName = currentObject?.name ?? "the artifact";
@@ -108,8 +114,8 @@ export default function ScanPage() {
         if (alive) setScanning(true);
       } catch (err) {
         if (alive) {
-          setCameraError("Cannot access camera. Check permissions or use manual entry.");
-          console.error("QR scanner error:", err);
+          setCameraError("Camera not accessible. Use the staff code instead.");
+          setManualMode(true);
         }
       }
     }
@@ -122,7 +128,7 @@ export default function ScanPage() {
   }, [mounted, manualMode, scanResult, processScan]);
 
   if (!mounted) return null;
-  if (!session || !team) { router.push("/"); return null; }
+  // team/session guard is at the top of the component
 
   function handleManualSubmit() {
     if (!manualCode.trim()) return;

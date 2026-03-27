@@ -212,10 +212,32 @@ export default function PlayPage() {
     finally { setHintLoading(null); }
   }
 
+  async function callForHelp() {
+    if (usedHintLevels.includes(3)) return;
+    setHintLoading(3);
+    try {
+      // Create help request message
+      await fetch("/api/admin/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          team_id: team!.id,
+          session_id: session!.id,
+          message: `\u{1F198} Team "${team!.name}" needs help at Chapter ${currentStepIndex + 1}: ${objectName}`,
+          type: "help_request",
+        }),
+      });
+      setHints((prev) => [...prev, { level: 3, text: "The Game Master has been alerted... A guardian will come to help you." }]);
+      setUsedHintLevels((prev) => [...prev, 3]);
+      setScore(Math.max(0, score - 50));
+    } catch { /* silent */ }
+    finally { setHintLoading(null); }
+  }
+
   const HINT_BUTTONS = [
     { level: 1, label: "Rephrase", cost: 15, color: "text-amber", bg: "border-amber/20" },
     { level: 2, label: "Direction", cost: 25, color: "text-orange-400", bg: "border-orange-400/20" },
-    { level: 3, label: "Answer", cost: 50, color: "text-red-400", bg: "border-red-400/20" },
+    { level: 3, label: "Help!", cost: 50, color: "text-red-400", bg: "border-red-400/20", isHelp: true },
   ];
 
   return (
@@ -359,7 +381,7 @@ export default function PlayPage() {
               return (
                 <button
                   key={h.level}
-                  onClick={() => requestHint(h.level)}
+                  onClick={() => (h as { isHelp?: boolean }).isHelp ? callForHelp() : requestHint(h.level)}
                   disabled={used || isLoading || hintLoading !== null}
                   className={`flex flex-1 flex-col items-center gap-0.5 rounded-xl border bg-surface px-2 py-2.5 text-[10px] transition disabled:opacity-30 ${h.bg}`}
                 >
