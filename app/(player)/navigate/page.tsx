@@ -23,17 +23,27 @@ export default function NavigatePage() {
   const [showPhoto, setShowPhoto] = useState(false);
   const watchRef = useRef<number | null>(null);
 
-  // Find the target object — use currentStep if set (scanned), otherwise use steps[currentStepIndex]
-  const nextStep = currentStep ?? steps[currentStepIndex] ?? null;
-  const targetObject = nextStep
-    ? objects.find((o) => o.id === nextStep.object_id)
-    : null;
+  const progress = usePlayerStore((s) => s.progress);
 
-  const targetLat = targetObject?.latitude ?? null;
-  const targetLng = targetObject?.longitude ?? null;
+  // Derive the team-relative chapter from completed progress count
+  const completedCount = progress.filter((p) => p.status === "completed").length;
+  const chapterNumber = completedCount + 1;
+  const totalChapters = team?.object_order?.length ?? steps.length;
+
+  // Find the target object from the team's object_order at the current position
+  const nextObjectId = team?.object_order?.[completedCount] ?? null;
+  const targetObject = nextObjectId ? objects.find((o) => o.id === nextObjectId) : null;
+
+  // Fallback: use steps[currentStepIndex] if object_order doesn't resolve
+  const fallbackStep = steps[currentStepIndex];
+  const fallbackObject = fallbackStep ? objects.find((o) => o.id === fallbackStep.object_id) : null;
+  const resolvedObject = targetObject ?? fallbackObject ?? null;
+
+  const targetLat = resolvedObject?.latitude ?? null;
+  const targetLng = resolvedObject?.longitude ?? null;
   const hasGPS = targetLat != null && targetLng != null;
-  const objectName = targetObject?.narrative_name || (targetObject?.name ?? "the next artifact");
-  const objectDesc = targetObject?.description ?? "";
+  const objectName = resolvedObject?.narrative_name || (resolvedObject?.name ?? "the next artifact");
+  const objectDesc = resolvedObject?.description ?? "";
   const teamColor = teamCharacter?.color ?? "#7F77DD";
 
   // Watch GPS position
@@ -99,7 +109,7 @@ export default function NavigatePage() {
     <main className="flex min-h-[100dvh] flex-col bg-deep text-white">
       {/* Header */}
       <div className="border-b border-white/5 px-4 py-3">
-        <p className="text-xs text-gray-500">Chapter {currentStepIndex + 1} of {steps.length}</p>
+        <p className="text-xs text-gray-500">Chapter {chapterNumber} of {totalChapters}</p>
         <h1 className="text-lg font-bold">Find: {objectName}</h1>
       </div>
 

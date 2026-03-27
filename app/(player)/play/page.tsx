@@ -272,6 +272,11 @@ export default function PlayPage() {
   const objectName = currentObject?.narrative_name || (currentObject?.name ?? "the artifact");
   const objectDesc = currentObject?.description ?? "";
 
+  // Team-relative chapter number (from completed count, not DB order)
+  const completedCount = progress.filter((p) => p.status === "completed").length;
+  const chapterNumber = completedCount + 1;
+  const totalChapters = team.object_order?.length ?? steps.length;
+
   const currentProgress = progress.find((p) => p.step_id === step.id);
 
   async function handleSubmitAnswer() {
@@ -340,7 +345,7 @@ export default function PlayPage() {
         body: JSON.stringify({
           team_id: team!.id,
           session_id: session!.id,
-          message: `\u{1F198} Team "${team!.name}" needs help at Chapter ${currentStepIndex + 1}: ${objectName}`,
+          message: `\u{1F198} Team "${team!.name}" needs help at Chapter ${chapterNumber}: ${objectName}`,
           type: "help_request",
         }),
       });
@@ -403,7 +408,7 @@ export default function PlayPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ backgroundColor: teamColor }}>{initials}</div>
-            <span className="text-sm font-semibold">Chapter {currentStepIndex + 1} of {steps.length}</span>
+            <span className="text-sm font-semibold">Chapter {chapterNumber} of {totalChapters}</span>
           </div>
           <div className="flex items-center gap-1.5 text-amber">
             <Hexagon className="h-4 w-4" />
@@ -411,7 +416,7 @@ export default function PlayPage() {
           </div>
         </div>
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/5">
-          <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${(currentStepIndex / steps.length) * 100}%` }} />
+          <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${(completedCount / totalChapters) * 100}%` }} />
         </div>
 
         {/* Tab bar */}

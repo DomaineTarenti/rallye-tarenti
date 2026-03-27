@@ -25,8 +25,8 @@ export default function CelebratePage() {
   const teamCharacter = usePlayerStore((s) => s.teamCharacter);
   const steps = usePlayerStore((s) => s.steps);
   const objects = usePlayerStore((s) => s.objects);
-  const currentStepIndex = usePlayerStore((s) => s.currentStepIndex);
   const currentStep = usePlayerStore((s) => s.currentStep);
+  const progress = usePlayerStore((s) => s.progress);
   const score = usePlayerStore((s) => s.score);
   const currentStepScore = usePlayerStore((s) => s.currentStepScore);
   const advanceStep = usePlayerStore((s) => s.advanceStep);
@@ -38,7 +38,11 @@ export default function CelebratePage() {
   const [collecting, setCollecting] = useState(false);
   const particles = useParticles();
 
-  const isLastStep = currentStepIndex + 1 >= steps.length;
+  // Team-relative chapter from completed count (including current step just completed)
+  const completedCount = progress.filter((p) => p.status === "completed").length;
+  const chapterNumber = completedCount;
+  const totalChapters = team?.object_order?.length ?? steps.length;
+  const isLastStep = completedCount >= totalChapters;
   const isStaff = currentStep?.type === "epreuve";
   const teamColor = teamCharacter?.color ?? "#7F77DD";
   const rank = getRank(score);
@@ -168,7 +172,7 @@ export default function CelebratePage() {
               {isStaff ? "Challenge Mastered!" : "Well Done!"}
             </h1>
             <p className="mb-5 text-sm text-white/60">
-              Chapter {currentStepIndex + 1} of {steps.length}
+              Chapter {chapterNumber} of {totalChapters}
             </p>
             <div className="animate-score-pop rounded-xl bg-white/20 px-8 py-4 backdrop-blur">
               <span className="text-4xl font-black text-white">+{currentStepScore} RP</span>
