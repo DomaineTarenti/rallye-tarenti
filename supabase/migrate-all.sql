@@ -46,6 +46,8 @@ CREATE INDEX IF NOT EXISTS idx_sessions_code_status ON sessions(code, status);
 CREATE INDEX IF NOT EXISTS idx_objects_session_order ON objects(session_id, "order");
 CREATE INDEX IF NOT EXISTS idx_steps_object_order ON steps(object_id, "order");
 CREATE INDEX IF NOT EXISTS idx_messages_team ON team_messages(team_id, created_at DESC);
+ALTER TABLE team_messages ADD COLUMN IF NOT EXISTS staff_id uuid REFERENCES staff_members(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_messages_staff ON team_messages(staff_id);
 CREATE INDEX IF NOT EXISTS idx_staff_session_name ON staff_members(session_id, name);
 
 -- ─── RLS Policies (drop + recreate for idempotency) ────────

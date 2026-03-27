@@ -48,43 +48,59 @@ export default function StaffDashboard() {
     if (mounted && !staffId) router.replace("/staff/login");
   }, [mounted, staffId, router]);
 
-  // Listen for teams reaching our assigned step via Realtime
+  // Listen for teams via TWO channels:
+  // 1. team_progress becoming active on our assigned step
+  // 2. team_messages targeted at this guardian (staff_id)
   useEffect(() => {
-    if (!assignedStepId || !sessionId) return;
+    if (!staffId || !sessionId) return;
+
+    async function showTeam(teamId: string, stepId: string, progressId?: string) {
+      const { data: team } = await supabase
+        .from("teams")
+        .select("id, name, character")
+        .eq("id", teamId)
+        .single();
+
+      if (team) {
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate([200, 100, 200]);
+        }
+        setWaitingTeam({
+          id: progressId ?? teamId,
+          teamId: team.id,
+          teamName: team.name,
+          character: parseChar(team.character),
+          stepId,
+          arrivedAt: Date.now(),
+        });
+        setResult(null);
+      }
+    }
 
     const ch = supabase
       .channel(`staff-${staffId}`)
+      // Channel 1: team_progress on our assigned step
       .on("postgres_changes", {
         event: "UPDATE",
         schema: "public",
         table: "team_progress",
-        filter: `step_id=eq.${assignedStepId}`,
-      }, async (payload) => {
+        ...(assignedStepId ? { filter: `step_id=eq.${assignedStepId}` } : {}),
+      }, (payload) => {
         const row = payload.new as { team_id: string; step_id: string; status: string; id: string };
         if (row.status !== "active") return;
-
-        // Fetch team info
-        const { data: team } = await supabase
-          .from("teams")
-          .select("id, name, character")
-          .eq("id", row.team_id)
-          .single();
-
-        if (team) {
-          // Vibrate if supported
-          if (typeof navigator !== "undefined" && navigator.vibrate) {
-            navigator.vibrate([200, 100, 200]);
-          }
-
-          setWaitingTeam({
-            id: row.id,
-            teamId: team.id,
-            teamName: team.name,
-            character: parseChar(team.character),
-            stepId: row.step_id,
-            arrivedAt: Date.now(),
-          });
-          setResult(null);
+        if (assignedStepId && row.step_id !== assignedStepId) return;
+        showTeam(row.team_id, row.step_id, row.id);
+      })
+      // Channel 2: team_messages targeted at this guardian
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "team_messages",
+        filter: `staff_id=eq.${staffId}`,
+      }, (payload) => {
+        const row = payload.new as { team_id: string; message: string; type: string };
+        if (row.type === "epreuve_request" && assignedStepId) {
+          showTeam(row.team_id, assignedStepId);
         }
       })
       .subscribe();
