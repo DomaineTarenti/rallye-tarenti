@@ -1,9 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@/lib/supabase";
 import type { ApiResponse } from "@/lib/types";
 
-// POST /api/scenario — generate scenario via Claude API
+const OBJECTS = [
+  { physical_id: "OBJ-01", base_name: "La Fiole", hidden_letter: "L" },
+  { physical_id: "OBJ-02", base_name: "Le Fragment", hidden_letter: "A" },
+  { physical_id: "OBJ-03", base_name: "Le Sceau", hidden_letter: "B" },
+  { physical_id: "OBJ-04", base_name: "La Clé", hidden_letter: "Y" },
+  { physical_id: "OBJ-05", base_name: "Le Parchemin", hidden_letter: "R" },
+  { physical_id: "OBJ-06", base_name: "L'Amulette", hidden_letter: "I" },
+  { physical_id: "OBJ-07", base_name: "L'Urne", hidden_letter: "N" },
+  { physical_id: "OBJ-08", base_name: "Le Médaillon", hidden_letter: "T" },
+  { physical_id: "OBJ-09", base_name: "Le Coffret", hidden_letter: "H" },
+];
+
+// POST /api/scenario — generate full 9-stage scenario and persist to DB
 export async function POST(req: NextRequest) {
-  const { theme, num_steps, context, session_name } = await req.json();
+  const { session_id, theme, session_name } = await req.json();
+
+  if (!session_id) {
+    return NextResponse.json<ApiResponse>(
+      { data: null, error: "session_id required" },
+      { status: 400 }
+    );
+  }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -13,41 +33,42 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const prompt = `You are a creative game designer for "The Quest", an interactive treasure hunt app.
-Generate a complete scenario for a treasure hunt with the following parameters:
+  const prompt = `Tu es un game designer créatif pour "The Quest", une chasse au trésor interactive.
 
-- Session name: ${session_name || "Untitled"}
-- Theme: ${theme || "A mysterious adventure"}
-- Number of stages: ${num_steps || 5}
-- Additional context: ${context || "None"}
+Session: "${session_name || "Untitled"}"
+Thème: "${theme || "A mysterious adventure"}"
 
-The 9 permanent base objects are (in order):
-1. La Fiole, 2. Le Fragment, 3. Le Sceau, 4. La Clé, 5. Le Parchemin,
-6. L'Amulette, 7. L'Urne, 8. Le Médaillon, 9. Le Coffret (final treasure)
+Génère exactement 9 étapes, une par objet physique permanent.
+Les 9 objets sont : La Fiole, Le Fragment, Le Sceau, La Clé, Le Parchemin, L'Amulette, L'Urne, Le Médaillon, Le Coffret.
+Les lettres cachées du mot LABYRINTH sont : L, A, B, Y, R, I, N, T, H (une par objet dans l'ordre).
 
-For each stage, provide:
-1. object_name: The base name from the list above (keep as-is)
-2. narrative_name: An immersive narrative name based on the theme (e.g. "La Fiole d'Huile Sacrée" for a Mediterranean theme). Must start with the base name.
-3. object_description: A short description of the physical object (1 sentence, in French)
-4. type: "enigme" for most, "epreuve" for 1 physical challenge
-5. text_narratif: An immersive narrative text (3-4 sentences in French, rich and atmospheric)
-6. enigme: The riddle or challenge description (in French)
-7. answer: The answer (single word or short phrase, lowercase, in French). Null for "epreuve" type.
+RÈGLES STRICTES :
+- Étapes 1-3, 5, 7-8 : type "enigme" — texte narratif + énigme + réponse (mot simple, en minuscules)
+- Étape 4 (La Clé) : type "epreuve" — défi physique validé par un gardien, pas de réponse
+- Étape 6 (L'Amulette) : type "epreuve" — défi de cohésion d'équipe, pas de réponse
+- Étape 9 (Le Coffret) : type "enigme" — conclusion dramatique, l'énigme finale dont la réponse est le nom du domaine/lieu
 
-Return ONLY valid JSON in this exact format:
+Pour chaque étape :
+1. narrative_name : nom narratif immersif basé sur le thème (ex: "La Fiole d'Huile Sacrée"). Doit commencer par le nom de base.
+2. text_narratif : texte immersif de 3-4 phrases en français. La lettre cachée (${OBJECTS.map(o => o.hidden_letter).join(",")}) doit apparaître naturellement dans le texte.
+3. enigme : l'énigme ou description du défi (en français)
+4. answer : la réponse (mot simple, minuscules, en français). null pour les épreuves.
+
+Retourne UNIQUEMENT du JSON valide :
 {
   "stages": [
     {
-      "object_name": "...",
-      "narrative_name": "...",
-      "object_description": "...",
-      "type": "enigme",
+      "object_name": "La Fiole",
+      "narrative_name": "La Fiole ...",
       "text_narratif": "...",
+      "type": "enigme",
       "enigme": "...",
       "answer": "..."
     }
   ]
-}`;
+}
+
+IMPORTANT : exactement 9 stages, dans l'ordre des objets.`;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -59,7 +80,7 @@ Return ONLY valid JSON in this exact format:
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 4096,
+        max_tokens: 8192,
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -73,10 +94,8 @@ Return ONLY valid JSON in this exact format:
     }
 
     const result = await res.json();
-    const text =
-      result.content?.[0]?.text ?? "";
+    const text = result.content?.[0]?.text ?? "";
 
-    // Extract JSON from response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       return NextResponse.json<ApiResponse>(
@@ -86,9 +105,84 @@ Return ONLY valid JSON in this exact format:
     }
 
     const scenario = JSON.parse(jsonMatch[0]);
+    const stages = scenario.stages as Array<Record<string, string>>;
+
+    if (!stages || stages.length < 9) {
+      return NextResponse.json<ApiResponse>(
+        { data: null, error: `AI generated ${stages?.length ?? 0} stages instead of 9` },
+        { status: 500 }
+      );
+    }
+
+    // ── Persist to Supabase ──
+    const supabase = createServerClient();
+
+    // Get all objects for this session
+    const { data: dbObjects } = await supabase
+      .from("objects")
+      .select("id, physical_id, order")
+      .eq("session_id", session_id)
+      .order("order");
+
+    if (!dbObjects || dbObjects.length === 0) {
+      return NextResponse.json<ApiResponse>(
+        { data: null, error: "No objects found for this session" },
+        { status: 400 }
+      );
+    }
+
+    // Map physical_id to db object
+    const objByPhysical = new Map(dbObjects.map((o) => [o.physical_id, o]));
+
+    // Delete existing steps for these objects
+    const objectIds = dbObjects.map((o) => o.id);
+    await supabase.from("steps").delete().in("object_id", objectIds);
+
+    // Insert new steps and update narrative_names
+    const stepsToInsert: Array<Record<string, unknown>> = [];
+    const narrativeUpdates: Array<{ id: string; narrative_name: string }> = [];
+
+    for (let i = 0; i < Math.min(stages.length, 9); i++) {
+      const stage = stages[i];
+      const objInfo = OBJECTS[i];
+      const dbObj = objByPhysical.get(objInfo.physical_id);
+      if (!dbObj) continue;
+
+      stepsToInsert.push({
+        object_id: dbObj.id,
+        text_narratif: stage.text_narratif ?? "",
+        enigme: stage.enigme ?? null,
+        answer: stage.type === "epreuve" ? null : (stage.answer ?? null),
+        type: stage.type ?? "enigme",
+        order: i + 1,
+      });
+
+      if (stage.narrative_name) {
+        narrativeUpdates.push({ id: dbObj.id, narrative_name: stage.narrative_name });
+      }
+    }
+
+    // Batch insert steps
+    if (stepsToInsert.length > 0) {
+      const { error: stepsErr } = await supabase.from("steps").insert(stepsToInsert);
+      if (stepsErr) {
+        return NextResponse.json<ApiResponse>(
+          { data: null, error: `Failed to save steps: ${stepsErr.message}` },
+          { status: 500 }
+        );
+      }
+    }
+
+    // Update narrative_names on objects
+    for (const upd of narrativeUpdates) {
+      await supabase
+        .from("objects")
+        .update({ narrative_name: upd.narrative_name })
+        .eq("id", upd.id);
+    }
 
     return NextResponse.json<ApiResponse>({
-      data: scenario,
+      data: { success: true, steps_count: stepsToInsert.length },
       error: null,
     });
   } catch (err) {

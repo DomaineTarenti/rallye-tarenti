@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   Plus,
@@ -10,11 +10,12 @@ import {
   ChevronUp,
   Sparkles,
   QrCode,
-  Save,
   Loader2,
   Play,
   Pause,
   RefreshCw,
+  Check,
+  Circle,
 } from "lucide-react";
 import { Loader } from "@/components/shared";
 import type { ApiResponse, Session } from "@/lib/types";
@@ -40,9 +41,17 @@ interface ObjectData {
   latitude?: number | null;
   longitude?: number | null;
   physical_id?: string | null;
-  // UI state
   expanded?: boolean;
   dirty?: boolean;
+}
+
+// Debounce helper
+function useDebouncedCallback<T extends (...args: unknown[]) => void>(fn: T, delay: number) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  return useCallback((...args: Parameters<T>) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => fn(...args), delay);
+  }, [fn, delay]) as T;
 }
 
 export default function ConfigureSessionPage() {
@@ -58,6 +67,7 @@ export default function ConfigureSessionPage() {
   const [generatingQR, setGeneratingQR] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [regeneratingNarrative, setRegeneratingNarrative] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 
   const loadData = useCallback(async () => {
     try {
@@ -106,6 +116,71 @@ export default function ConfigureSessionPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // ── Auto-save logic ──
+  const autoSaveRef = useRef<(objId: string, stepId: string | undefined, objUpdates: Record<string, unknown>, stepUpdates?: Record<string, unknown>) => void>();
+
+  const doAutoSave = useCallback(async (objId: string, stepId: string | undefined, objUpdates: Record<string, unknown>, stepUpdates?: Record<string, unknown>) => {
+    if (!objId) return;
+    setSaveStatus("saving");
+    try {
+      await fetch("/api/objects", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: objId,
+          ...objUpdates,
+          ...(stepId && stepUpdates ? { step_id: stepId, step: stepUpdates } : {}),
+        }),
+      });
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 2000);
+    } catch {
+      setSaveStatus("idle");
+    }
+  }, []);
+
+  const debouncedAutoSave = useDebouncedCallback(
+    ((...args: unknown[]) => doAutoSave(args[0] as string, args[1] as string | undefined, args[2] as Record<string, unknown>, args[3] as Record<string, unknown> | undefined)) as (...args: unknown[]) => void,
+    1000
+  );
+
+  autoSaveRef.current = debouncedAutoSave;
+
+  function updateObject(idx: number, field: string, value: string) {
+    setObjects((prev) => {
+      const next = prev.map((o, i) => (i === idx ? { ...o, [field]: value, dirty: false } : o));
+      const obj = next[idx];
+      if (obj.id) {
+        autoSaveRef.current?.(obj.id, obj.step_id, { [field]: value });
+      }
+      return next;
+    });
+  }
+
+  function updateStep(idx: number, field: string, value: string) {
+    setObjects((prev) => {
+      const next = prev.map((o, i) => {
+        if (i !== idx) return o;
+        const steps = [...(o.steps ?? [])];
+        if (steps.length === 0) steps.push({ text_narratif: "", enigme: "", answer: "", type: "enigme", photo_indice_url: "" });
+        steps[0] = { ...steps[0], [field]: value };
+        return { ...o, steps, dirty: false };
+      });
+      const obj = next[idx];
+      const step = obj.steps?.[0];
+      if (obj.id && obj.step_id && step) {
+        autoSaveRef.current?.(obj.id, obj.step_id, {}, {
+          text_narratif: step.text_narratif,
+          enigme: step.enigme || null,
+          answer: step.answer || null,
+          type: step.type,
+          photo_indice_url: step.photo_indice_url || null,
+        });
+      }
+      return next;
+    });
+  }
+
   function addObject() {
     setObjects((prev) => [
       ...prev,
@@ -124,24 +199,6 @@ export default function ConfigureSessionPage() {
         dirty: true,
       },
     ]);
-  }
-
-  function updateObject(idx: number, field: string, value: string) {
-    setObjects((prev) =>
-      prev.map((o, i) => (i === idx ? { ...o, [field]: value, dirty: true } : o))
-    );
-  }
-
-  function updateStep(idx: number, field: string, value: string) {
-    setObjects((prev) =>
-      prev.map((o, i) => {
-        if (i !== idx) return o;
-        const steps = [...(o.steps ?? [])];
-        if (steps.length === 0) steps.push({ text_narratif: "", enigme: "", answer: "", type: "enigme", photo_indice_url: "" });
-        steps[0] = { ...steps[0], [field]: value };
-        return { ...o, steps, dirty: true };
-      })
-    );
   }
 
   function toggleExpand(idx: number) {
@@ -167,7 +224,6 @@ export default function ConfigureSessionPage() {
 
     try {
       if (obj.id) {
-        // Update existing
         await fetch("/api/objects", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -187,7 +243,6 @@ export default function ConfigureSessionPage() {
           }),
         });
       } else {
-        // Create new
         const res = await fetch("/api/objects", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -272,34 +327,21 @@ export default function ConfigureSessionPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          session_id: sessionId,
           session_name: session.name,
           theme: session.theme ?? "A mysterious adventure",
-          num_steps: 5,
-          context: "",
         }),
       });
       const json: ApiResponse = await res.json();
-      const data = json.data as { stages: Array<Record<string, string>> } | null;
-
-      if (data?.stages) {
-        const newObjects: ObjectData[] = data.stages.map((s, i) => ({
-          name: s.object_name ?? `Object ${i + 1}`,
-          narrative_name: s.narrative_name ?? null,
-          description: s.object_description ?? "",
-          order: i + 1,
-          steps: [{
-            text_narratif: s.text_narratif ?? "",
-            enigme: s.enigme ?? "",
-            answer: s.answer ?? "",
-            type: (s.type as "enigme" | "epreuve" | "navigation") ?? "enigme",
-            photo_indice_url: "",
-          }],
-          expanded: false,
-          dirty: true,
-        }));
-        setObjects(newObjects);
+      if (json.error) {
+        alert(`Generation error: ${json.error}`);
+      } else {
+        // Refetch from database — the API already persisted everything
+        await loadData();
       }
-    } catch { /* silent */ }
+    } catch {
+      alert("Generation failed — network error");
+    }
     setGenerating(false);
   }
 
@@ -331,67 +373,35 @@ export default function ConfigureSessionPage() {
 
         if (i > 0 && posOnPage === 0) doc.addPage();
 
-        // ── Page header (once per page) ──
         if (posOnPage === 0) {
-          // Logo text
           doc.setFontSize(18);
           doc.setFont("helvetica", "bold");
-          doc.setTextColor(127, 119, 221); // #7F77DD
+          doc.setTextColor(127, 119, 221);
           doc.text("THE QUEST", pageW / 2, margin + 5, { align: "center" });
 
-          // Session name
           doc.setFontSize(10);
           doc.setFont("helvetica", "normal");
           doc.setTextColor(100, 100, 100);
-          doc.text(
-            session?.name ?? "Quest Session",
-            pageW / 2,
-            margin + 12,
-            { align: "center" }
-          );
+          doc.text(session?.name ?? "Quest Session", pageW / 2, margin + 12, { align: "center" });
 
-          // Divider line
           doc.setDrawColor(127, 119, 221);
           doc.setLineWidth(0.5);
           doc.line(margin, margin + 16, pageW - margin, margin + 16);
 
-          // Page number
           doc.setFontSize(7);
           doc.setTextColor(180, 180, 180);
-          doc.text(
-            `Page ${pageIdx + 1} / ${totalPages}`,
-            pageW / 2,
-            pageH - 10,
-            { align: "center" }
-          );
-
-          // Footer
-          doc.text(
-            "Print and place each QR code next to its corresponding object",
-            pageW / 2,
-            pageH - 6,
-            { align: "center" }
-          );
+          doc.text(`Page ${pageIdx + 1} / ${totalPages}`, pageW / 2, pageH - 10, { align: "center" });
+          doc.text("Print and place each QR code next to its corresponding object", pageW / 2, pageH - 6, { align: "center" });
         }
 
         const obj = savedObjects[i];
         const cellX = margin + col * cellW;
         const cellY = margin + headerH + row * cellH;
 
-        // ── Card border ──
         doc.setDrawColor(220, 220, 220);
         doc.setLineWidth(0.3);
-        doc.roundedRect(
-          cellX + 4,
-          cellY + 2,
-          cellW - 8,
-          cellH - 8,
-          3,
-          3,
-          "S"
-        );
+        doc.roundedRect(cellX + 4, cellY + 2, cellW - 8, cellH - 8, 3, 3, "S");
 
-        // ── Order badge ──
         const badgeX = cellX + 10;
         const badgeY = cellY + 8;
         doc.setFillColor(127, 119, 221);
@@ -401,40 +411,28 @@ export default function ConfigureSessionPage() {
         doc.setTextColor(255, 255, 255);
         doc.text(String(i + 1), badgeX, badgeY + 1, { align: "center" });
 
-        // ── Object name ──
         doc.setFontSize(11);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(30, 30, 30);
         const nameX = cellX + cellW / 2;
         doc.text(obj.name, nameX, cellY + 12, { align: "center" });
 
-        // ── QR code ──
         const qrDataUrl = await QRCode.toDataURL(obj.qr_code_id!, {
-          width: 400,
-          margin: 1,
-          color: { dark: "#1a1a2e", light: "#ffffff" },
+          width: 400, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" },
         });
-
         const qrX = cellX + (cellW - qrSize) / 2;
         const qrY = cellY + 18;
         doc.addImage(qrDataUrl, "PNG", qrX, qrY, qrSize, qrSize);
 
-        // ── QR code ID (small) ──
         doc.setFontSize(6);
         doc.setFont("helvetica", "normal");
         doc.setTextColor(160, 160, 160);
-        doc.text(obj.qr_code_id!, nameX, qrY + qrSize + 4, {
-          align: "center",
-        });
+        doc.text(obj.qr_code_id!, nameX, qrY + qrSize + 4, { align: "center" });
 
-        // ── Description (if fits) ──
         if (obj.description) {
           doc.setFontSize(7);
           doc.setTextColor(130, 130, 130);
-          const desc =
-            obj.description.length > 60
-              ? obj.description.slice(0, 57) + "..."
-              : obj.description;
+          const desc = obj.description.length > 60 ? obj.description.slice(0, 57) + "..." : obj.description;
           doc.text(desc, nameX, qrY + qrSize + 9, { align: "center" });
         }
       }
@@ -511,6 +509,14 @@ export default function ConfigureSessionPage() {
                 Regenerate
               </button>
               <span> · {objects.length} objects</span>
+              {/* Save status indicator */}
+              <span className="ml-auto flex items-center gap-1 text-xs">
+                {saveStatus === "saving" ? (
+                  <><Circle className="h-2 w-2 animate-pulse text-amber-500" /> Saving...</>
+                ) : saveStatus === "saved" ? (
+                  <><Check className="h-3 w-3 text-green-500" /> Saved</>
+                ) : null}
+              </span>
             </div>
           </div>
           <div className="flex gap-2">
@@ -540,7 +546,7 @@ export default function ConfigureSessionPage() {
             className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
           >
             {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {generating ? "Generating..." : "Generate with AI"}
+            {generating ? "Generating 9 stages..." : "Generate with AI"}
           </button>
           <button
             onClick={generateQRPdf}
@@ -569,6 +575,7 @@ export default function ConfigureSessionPage() {
           {objects.map((obj, idx) => {
             const step = obj.steps?.[0];
             const isSaving = saving === (obj.id ?? `new-${idx}`);
+            const isNew = !obj.id;
 
             return (
               <div
@@ -619,7 +626,6 @@ export default function ConfigureSessionPage() {
                     </span>
                   )}
 
-                  {/* Reorder */}
                   <button onClick={() => moveObject(idx, -1)} disabled={idx === 0} className="text-gray-300 hover:text-gray-500 disabled:opacity-30">
                     <ChevronUp className="h-4 w-4" />
                   </button>
@@ -668,7 +674,7 @@ export default function ConfigureSessionPage() {
                         />
                       </div>
 
-                      {/* Enigme + Answer (only for enigme type) */}
+                      {/* Enigme + Answer */}
                       {step?.type !== "navigation" && (
                         <>
                           <div>
@@ -721,19 +727,13 @@ export default function ConfigureSessionPage() {
                             navigator.geolocation.getCurrentPosition(async (pos) => {
                               const lat = pos.coords.latitude;
                               const lng = pos.coords.longitude;
-                              console.log("Updating object GPS:", obj.id, obj.name, lat, lng);
                               const res = await fetch("/api/objects", {
                                 method: "PATCH",
                                 headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                  id: obj.id,
-                                  latitude: lat,
-                                  longitude: lng,
-                                }),
+                                body: JSON.stringify({ id: obj.id, latitude: lat, longitude: lng }),
                               });
                               const json = await res.json();
                               if (json.error) { alert(json.error); return; }
-                              // Update only this object locally — don't refetch all
                               setObjects((prev) => prev.map((o) =>
                                 o.id === obj.id ? { ...o, latitude: lat, longitude: lng } : o
                               ));
@@ -761,14 +761,16 @@ export default function ConfigureSessionPage() {
                         >
                           <Trash2 className="h-3.5 w-3.5" /> Delete
                         </button>
-                        <button
-                          onClick={() => saveObject(idx)}
-                          disabled={isSaving || !obj.name.trim()}
-                          className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-                        >
-                          {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                          {isSaving ? "Saving..." : obj.id ? "Save" : "Create"}
-                        </button>
+                        {isNew && (
+                          <button
+                            onClick={() => saveObject(idx)}
+                            disabled={isSaving || !obj.name.trim()}
+                            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                          >
+                            {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                            {isSaving ? "Creating..." : "Create"}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
