@@ -259,10 +259,35 @@ IMPORTANT: exactement 11 éléments (step_index 0 à 10).`;
         .eq("id", upd.id);
     }
 
+    // Auto-assign epreuve steps to guardians
+    const { data: insertedSteps } = await supabase
+      .from("steps")
+      .select("id, object_id, type")
+      .in("object_id", objectIds)
+      .eq("type", "epreuve");
+
+    if (insertedSteps && insertedSteps.length > 0) {
+      const { data: guardians } = await supabase
+        .from("staff_members")
+        .select("id")
+        .eq("session_id", session_id)
+        .order("name");
+
+      if (guardians) {
+        for (let i = 0; i < Math.min(insertedSteps.length, guardians.length); i++) {
+          await supabase
+            .from("staff_members")
+            .update({ assigned_step_id: insertedSteps[i].id })
+            .eq("id", guardians[i].id);
+        }
+        console.log("Auto-assigned", Math.min(insertedSteps.length, guardians.length), "epreuve steps to guardians");
+      }
+    }
+
     console.log("Scenario generated:", stepsToInsert.length, "steps + intro persisted for session", session_id);
 
     return NextResponse.json<ApiResponse>({
-      data: { success: true, steps_count: stepsToInsert.length + 2 }, // +2 for intro + unlock
+      data: { success: true, steps_count: stepsToInsert.length + 2 },
       error: null,
     });
   } catch (err) {

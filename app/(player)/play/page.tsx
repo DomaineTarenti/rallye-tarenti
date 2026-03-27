@@ -62,6 +62,7 @@ export default function PlayPage() {
   const [photoExpanded, setPhotoExpanded] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"play" | "journal">("play");
+  const [introDismissed, setIntroDismissed] = useState(false);
 
   // Realtime admin messages
   useEffect(() => {
@@ -164,6 +165,77 @@ export default function PlayPage() {
   // Check if this is the first step and hasn't been scanned yet
   const currentProgress = progress.find((p) => p.step_id === step.id);
   const isFirstStep = currentStepIndex === 0 && currentProgress?.status === "active";
+
+  // Show intro screen on first step (before any scanning)
+  const hasIntro = session.intro_text && isFirstStep && !introDismissed;
+  if (hasIntro) {
+    return (
+      <main className="flex min-h-[100dvh] flex-col bg-deep">
+        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+          <div className="mb-4 text-5xl">&#x1F3F0;</div>
+          <h1 className="mb-4 text-2xl font-bold text-white">{session.name}</h1>
+          <Card className="mb-6 w-full max-w-sm bg-surface">
+            <p className="text-sm italic leading-relaxed text-gray-300">{session.intro_text}</p>
+          </Card>
+          {session.intro_enigme && (
+            <Card className="mb-6 w-full max-w-sm bg-surface">
+              <span className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">First Riddle</span>
+              <p className="mb-3 font-medium text-white">{session.intro_enigme}</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={answer}
+                  onChange={(e) => setAnswer(e.target.value)}
+                  placeholder="Your answer..."
+                  className="flex-1 rounded-xl border border-white/10 bg-deep px-4 py-3 text-white placeholder-gray-500 focus:border-primary focus:outline-none"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && answer.trim()) {
+                      const normalize = (s: string) => s.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                      if (session.intro_answer && normalize(answer) === normalize(session.intro_answer)) {
+                        setIntroDismissed(true);
+                        setAnswer("");
+                      } else {
+                        setFeedback({ type: "error", msg: "Not quite... try again!" });
+                        setShaking(true);
+                        setTimeout(() => setShaking(false), 400);
+                      }
+                    }
+                  }}
+                />
+                <Button
+                  onClick={() => {
+                    if (!answer.trim()) return;
+                    const normalize = (s: string) => s.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                    if (session.intro_answer && normalize(answer) === normalize(session.intro_answer)) {
+                      setIntroDismissed(true);
+                      setAnswer("");
+                      setFeedback(null);
+                    } else {
+                      setFeedback({ type: "error", msg: "Not quite... try again!" });
+                      setShaking(true);
+                      setTimeout(() => setShaking(false), 400);
+                    }
+                  }}
+                  disabled={!answer.trim()}
+                  className="px-4"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+              {feedback && (
+                <p className={`mt-2 text-sm ${feedback.type === "error" ? "text-red-400" : "text-blue-400"}`}>{feedback.msg}</p>
+              )}
+            </Card>
+          )}
+          {!session.intro_enigme && (
+            <Button onClick={() => setIntroDismissed(true)} size="lg" className="w-full max-w-sm">
+              Begin the Quest
+            </Button>
+          )}
+        </div>
+      </main>
+    );
+  }
 
   async function handleSubmitAnswer() {
     if (!answer.trim() || submitting) return;

@@ -51,7 +51,80 @@ export async function POST(req: NextRequest) {
     const resolvedSessionId = session_id || team.session_id;
     console.log("[SCAN] Looking for physical_id:", scannedCode, "in session:", resolvedSessionId);
 
-    // 2. Find object by physical_id within the session
+    // 2a. Check if this is a staff validation code (4 digits)
+    if (/^\d{4}$/.test(scannedCode)) {
+      console.log("[SCAN] Detected 4-digit staff code:", scannedCode);
+      const { data: staffMember } = await supabase
+        .from("staff_members")
+        .select("id, name, assigned_step_id, validation_code")
+        .eq("session_id", resolvedSessionId)
+        .eq("validation_code", scannedCode)
+        .single();
+
+      if (staffMember && staffMember.assigned_step_id) {
+        // Staff code valid — mark the epreuve step as completed
+        console.log("[SCAN] Staff code match:", staffMember.name, "→ step", staffMember.assigned_step_id);
+
+        // Check this team has this step as active
+        const { data: progress } = await supabase
+          .from("team_progress")
+          .select("*")
+          .eq("team_id", team_id)
+          .eq("step_id", staffMember.assigned_step_id)
+          .single();
+
+        if (progress && progress.status === "active") {
+          // Validate the epreuve
+          await supabase
+            .from("team_progress")
+            .update({ status: "completed", epreuve_success: true, completed_at: new Date().toISOString() })
+            .eq("id", progress.id);
+
+          // Activate next step
+          const { data: allProg } = await supabase
+            .from("team_progress")
+            .select("id, step_id, status")
+            .eq("team_id", team_id);
+
+          const { data: allSteps } = await supabase
+            .from("steps")
+            .select("id, order")
+            .in("id", (allProg ?? []).map(p => p.step_id));
+
+          const stepOrder = new Map((allSteps ?? []).map(s => [s.id, s.order]));
+          const nextLocked = (allProg ?? [])
+            .filter(p => p.status === "locked")
+            .sort((a, b) => (stepOrder.get(a.step_id) ?? 0) - (stepOrder.get(b.step_id) ?? 0));
+
+          if (nextLocked.length > 0) {
+            await supabase.from("team_progress").update({ status: "active" }).eq("id", nextLocked[0].id);
+          }
+
+          // Get the step data to return
+          const { data: step } = await supabase
+            .from("steps")
+            .select("*")
+            .eq("id", staffMember.assigned_step_id)
+            .single();
+
+          const { data: obj } = await supabase
+            .from("objects")
+            .select("*")
+            .eq("id", step?.object_id)
+            .single();
+
+          const result: ScanResult = { valid: true, step, object: obj, message: `Validated by ${staffMember.name}!` };
+          return json(result);
+        }
+
+        // Step exists but not active for this team
+        const result: ScanResult = { valid: false, reason: "wrong_order", message: "This challenge is not your current step." };
+        return json(result);
+      }
+      // Not a valid staff code — fall through to physical_id lookup
+    }
+
+    // 2b. Find object by physical_id within the session
     let scannedObject = await findObject(supabase, scannedCode, resolvedSessionId);
 
     if (!scannedObject) {
