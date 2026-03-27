@@ -133,11 +133,12 @@ export async function POST(req: NextRequest) {
     .select();
 
   // Clone the 9 template objects for this new session
+  const sessionPrefix = data.id.slice(0, 8);
   const newObjects = TEMPLATE_OBJECTS.map((obj, i) => ({
     session_id: data.id,
     name: obj.base_name,
     physical_id: obj.physical_id,
-    qr_code_id: obj.qr_code_id,
+    qr_code_id: `${obj.physical_id}-${sessionPrefix}`,
     hidden_letter: obj.hidden_letter,
     description: obj.description,
     is_final: obj.is_final,

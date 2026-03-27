@@ -362,7 +362,7 @@ export default function ConfigureSessionPage() {
       const headerH = 30;
       const cellH = (pageH - margin * 2 - headerH) / rows;
 
-      const savedObjects = objects.filter((o) => o.id && o.qr_code_id);
+      const savedObjects = objects.filter((o) => o.id && o.physical_id);
       const totalPages = Math.ceil(savedObjects.length / 4);
 
       for (let i = 0; i < savedObjects.length; i++) {
@@ -417,7 +417,8 @@ export default function ConfigureSessionPage() {
         const nameX = cellX + cellW / 2;
         doc.text(obj.name, nameX, cellY + 12, { align: "center" });
 
-        const qrDataUrl = await QRCode.toDataURL(obj.qr_code_id!, {
+        const qrContent = obj.physical_id ?? obj.qr_code_id ?? obj.name;
+        const qrDataUrl = await QRCode.toDataURL(qrContent, {
           width: 400, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" },
         });
         const qrX = cellX + (cellW - qrSize) / 2;
@@ -427,7 +428,7 @@ export default function ConfigureSessionPage() {
         doc.setFontSize(6);
         doc.setFont("helvetica", "normal");
         doc.setTextColor(160, 160, 160);
-        doc.text(obj.qr_code_id!, nameX, qrY + qrSize + 4, { align: "center" });
+        doc.text(qrContent, nameX, qrY + qrSize + 4, { align: "center" });
 
         if (obj.description) {
           doc.setFontSize(7);

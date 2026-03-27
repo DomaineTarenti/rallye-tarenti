@@ -15,6 +15,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Normalize: the physical QR code contains the physical_id (e.g. "OBJ-01")
+  const scannedCode = qr_code_id.trim().toUpperCase();
+
   // ── Rate limit: 10 scans/min per team ──
   const rl = checkRateLimit(`scan:${team_id}`);
   if (!rl.allowed) {
@@ -25,7 +28,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Cache check: same scan within 30s returns cached result ──
-  const cached = getCachedScan(qr_code_id, team_id);
+  const cached = getCachedScan(scannedCode, team_id);
   if (cached) {
     return NextResponse.json<ApiResponse<ScanResult>>({
       data: cached as ScanResult,
@@ -35,23 +38,58 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServerClient();
 
-  // 1. Find object by QR code
-  const { data: scannedObject, error: objError } = await supabase
-    .from("objects")
-    .select("*")
-    .eq("qr_code_id", qr_code_id)
+  // 1. Get the team to find the session_id
+  const { data: team } = await supabase
+    .from("teams")
+    .select("session_id")
+    .eq("id", team_id)
     .single();
 
-  if (objError || !scannedObject) {
-    const result: ScanResult = {
-      valid: false,
-      reason: "unknown",
-      message: "This sigil is unrecognized.",
-    };
-    setCachedScan(qr_code_id, team_id, result);
+  if (!team) {
+    const result: ScanResult = { valid: false, reason: "unknown", message: "Team not found." };
     return NextResponse.json<ApiResponse<ScanResult>>({ data: result, error: null });
   }
 
+  // 2. Find object by physical_id within the team's session
+  const { data: scannedObject } = await supabase
+    .from("objects")
+    .select("*")
+    .eq("physical_id", scannedCode)
+    .eq("session_id", team.session_id)
+    .single();
+
+  if (!scannedObject) {
+    // Fallback: try by qr_code_id for backward compatibility
+    const { data: fallbackObj } = await supabase
+      .from("objects")
+      .select("*")
+      .eq("qr_code_id", scannedCode)
+      .single();
+
+    if (!fallbackObj) {
+      const result: ScanResult = {
+        valid: false,
+        reason: "unknown",
+        message: "This sigil is unrecognized.",
+      };
+      setCachedScan(scannedCode, team_id, result);
+      return NextResponse.json<ApiResponse<ScanResult>>({ data: result, error: null });
+    }
+
+    // Use the fallback object
+    return processMatch(supabase, fallbackObj, team_id, scannedCode);
+  }
+
+  return processMatch(supabase, scannedObject, team_id, scannedCode);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function processMatch(
+  supabase: ReturnType<typeof createServerClient>,
+  scannedObject: any,
+  team_id: string,
+  scannedCode: string,
+) {
   // 2. Get team's current active progress
   const { data: activeProgressList } = await supabase
     .from("team_progress")
@@ -67,7 +105,7 @@ export async function POST(req: NextRequest) {
       reason: "quest_complete",
       message: "You have completed all chapters!",
     };
-    setCachedScan(qr_code_id, team_id, result);
+    setCachedScan(scannedCode, team_id, result);
     return NextResponse.json<ApiResponse<ScanResult>>({ data: result, error: null });
   }
 
@@ -92,7 +130,7 @@ export async function POST(req: NextRequest) {
     const { data: objectSteps } = await supabase
       .from("steps")
       .select("id")
-      .eq("object_id", scannedObject.id);
+      .eq("object_id", scannedObject.id as string);
 
     const stepIds = (objectSteps ?? []).map((s) => s.id);
 
@@ -110,7 +148,7 @@ export async function POST(req: NextRequest) {
           reason: "already_scanned",
           message: "You have already claimed this artifact.",
         };
-        setCachedScan(qr_code_id, team_id, result);
+        setCachedScan(scannedCode, team_id, result);
         return NextResponse.json<ApiResponse<ScanResult>>({ data: result, error: null });
       }
     }
@@ -120,7 +158,7 @@ export async function POST(req: NextRequest) {
       reason: "wrong_order",
       message: "This artifact is not yet your destiny... your path leads elsewhere for now.",
     };
-    setCachedScan(qr_code_id, team_id, result);
+    setCachedScan(scannedCode, team_id, result);
     return NextResponse.json<ApiResponse<ScanResult>>({ data: result, error: null });
   }
 
@@ -130,6 +168,6 @@ export async function POST(req: NextRequest) {
     step: activeStep,
     object: scannedObject,
   };
-  setCachedScan(qr_code_id, team_id, result);
+  setCachedScan(scannedCode, team_id, result);
   return NextResponse.json<ApiResponse<ScanResult>>({ data: result, error: null });
 }
