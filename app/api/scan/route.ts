@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCachedScan, setCachedScan } from "@/lib/scan-cache";
+import { activateNextStep } from "@/lib/progress";
 import type { ApiResponse, ScanResult } from "@/lib/types";
 
 // POST /api/scan — process a QR scan
@@ -80,25 +81,8 @@ export async function POST(req: NextRequest) {
             .update({ status: "completed", epreuve_success: true, completed_at: new Date().toISOString() })
             .eq("id", progress.id);
 
-          // Activate next step
-          const { data: allProg } = await supabase
-            .from("team_progress")
-            .select("id, step_id, status")
-            .eq("team_id", team_id);
-
-          const { data: allSteps } = await supabase
-            .from("steps")
-            .select("id, order")
-            .in("id", (allProg ?? []).map(p => p.step_id));
-
-          const stepOrder = new Map((allSteps ?? []).map(s => [s.id, s.order]));
-          const nextLocked = (allProg ?? [])
-            .filter(p => p.status === "locked")
-            .sort((a, b) => (stepOrder.get(a.step_id) ?? 0) - (stepOrder.get(b.step_id) ?? 0));
-
-          if (nextLocked.length > 0) {
-            await supabase.from("team_progress").update({ status: "active" }).eq("id", nextLocked[0].id);
-          }
+          // Activate next step using team's object_order
+          await activateNextStep(supabase, team_id);
 
           // Get the step data to return
           const { data: step } = await supabase
