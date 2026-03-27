@@ -25,6 +25,8 @@ export interface Session {
   created_at: string;
   started_at: string | null;
   intro_text: string | null;
+  intro_enigme: string | null;
+  intro_answer: string | null;
 }
 
 // ─── Object (objet physique avec QR) ─────────────────────────────

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import type { ApiResponse, Session } from "@/lib/types";
+import { TEMPLATE_OBJECTS } from "@/lib/constants";
 
 function generateCode(): string {
   const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -130,6 +131,26 @@ export async function POST(req: NextRequest) {
     .from("scoring_config")
     .insert({ session_id: data.id })
     .select();
+
+  // Clone the 9 template objects for this new session
+  const newObjects = TEMPLATE_OBJECTS.map((obj, i) => ({
+    session_id: data.id,
+    name: obj.base_name,
+    physical_id: obj.physical_id,
+    qr_code_id: obj.qr_code_id,
+    hidden_letter: obj.hidden_letter,
+    description: obj.description,
+    is_final: obj.is_final,
+    order: i + 1,
+    narrative_name: null,
+    latitude: null,
+    longitude: null,
+  }));
+
+  const { error: objErr } = await supabase.from("objects").insert(newObjects);
+  if (objErr) {
+    console.error("Failed to clone template objects:", objErr.message);
+  }
 
   return NextResponse.json<ApiResponse<Session>>(
     { data, error: null },

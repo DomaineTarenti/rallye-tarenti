@@ -1,20 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import type { ApiResponse } from "@/lib/types";
+import { TEMPLATE_OBJECTS } from "@/lib/constants";
 
-const OBJECTS = [
-  { physical_id: "OBJ-01", base_name: "La Fiole", hidden_letter: "L" },
-  { physical_id: "OBJ-02", base_name: "Le Fragment", hidden_letter: "A" },
-  { physical_id: "OBJ-03", base_name: "Le Sceau", hidden_letter: "B" },
-  { physical_id: "OBJ-04", base_name: "La Clé", hidden_letter: "Y" },
-  { physical_id: "OBJ-05", base_name: "Le Parchemin", hidden_letter: "R" },
-  { physical_id: "OBJ-06", base_name: "L'Amulette", hidden_letter: "I" },
-  { physical_id: "OBJ-07", base_name: "L'Urne", hidden_letter: "N" },
-  { physical_id: "OBJ-08", base_name: "Le Médaillon", hidden_letter: "T" },
-  { physical_id: "OBJ-09", base_name: "Le Coffret", hidden_letter: "H" },
-];
-
-// POST /api/scenario — generate full 9-stage scenario and persist to DB
+// POST /api/scenario — generate full 11-step scenario and persist to DB
 export async function POST(req: NextRequest) {
   const { session_id, theme, session_name } = await req.json();
 
@@ -33,42 +22,121 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const supabase = createServerClient();
+
+  // ── Get objects for this session, clone template if none exist ──
+  let { data: dbObjects } = await supabase
+    .from("objects")
+    .select("id, physical_id, order")
+    .eq("session_id", session_id)
+    .order("order");
+
+  console.log("Session ID:", session_id, "— Objects found:", dbObjects?.length ?? 0);
+
+  if (!dbObjects || dbObjects.length === 0) {
+    console.log("No objects — cloning template objects for session", session_id);
+    const newObjects = TEMPLATE_OBJECTS.map((obj, i) => ({
+      session_id,
+      name: obj.base_name,
+      physical_id: obj.physical_id,
+      qr_code_id: obj.qr_code_id,
+      hidden_letter: obj.hidden_letter,
+      description: obj.description,
+      is_final: obj.is_final,
+      order: i + 1,
+    }));
+
+    const { data: inserted, error: insertErr } = await supabase
+      .from("objects")
+      .insert(newObjects)
+      .select("id, physical_id, order");
+
+    if (insertErr || !inserted) {
+      return NextResponse.json<ApiResponse>(
+        { data: null, error: `Failed to create objects: ${insertErr?.message}` },
+        { status: 500 }
+      );
+    }
+    dbObjects = inserted;
+    console.log("Cloned", inserted.length, "template objects");
+  }
+
+  // Map physical_id to db object
+  const objByPhysical = new Map(dbObjects.map((o) => [o.physical_id, o]));
+  const objectIds = dbObjects.map((o) => o.id);
+
+  // ── AI generation prompt — 11 steps ──
+  const objectList = TEMPLATE_OBJECTS.map((o, i) =>
+    `${i + 1}. ${o.base_name} (lettre cachée: ${o.hidden_letter})${i === 3 || i === 5 ? " — TYPE ÉPREUVE" : ""}${i === 8 ? " — OBJET FINAL" : ""}`
+  ).join("\n");
+
   const prompt = `Tu es un game designer créatif pour "The Quest", une chasse au trésor interactive.
 
 Session: "${session_name || "Untitled"}"
 Thème: "${theme || "A mysterious adventure"}"
 
-Génère exactement 9 étapes, une par objet physique permanent.
-Les 9 objets sont : La Fiole, Le Fragment, Le Sceau, La Clé, Le Parchemin, L'Amulette, L'Urne, Le Médaillon, Le Coffret.
-Les lettres cachées du mot LABYRINTH sont : L, A, B, Y, R, I, N, T, H (une par objet dans l'ordre).
+Tu dois générer EXACTEMENT 11 étapes. Pas 9, pas 10 — exactement 11.
 
-RÈGLES STRICTES :
-- Étapes 1-3, 5, 7-8 : type "enigme" — texte narratif + énigme + réponse (mot simple, en minuscules)
-- Étape 4 (La Clé) : type "epreuve" — défi physique validé par un gardien, pas de réponse
-- Étape 6 (L'Amulette) : type "epreuve" — défi de cohésion d'équipe, pas de réponse
-- Étape 9 (Le Coffret) : type "enigme" — conclusion dramatique, l'énigme finale dont la réponse est le nom du domaine/lieu
+═══ ÉTAPE 0 — Introduction commune ═══
+- text_narratif: introduction immersive (4-5 phrases en français) qui plonge les joueurs dans l'univers
+- enigme: une première énigme simple commune à toutes les équipes
+- answer: réponse simple (1 mot en minuscules, lié au thème)
+- type: "enigme"
+- Pas d'objet physique associé
 
-Pour chaque étape :
-1. narrative_name : nom narratif immersif basé sur le thème (ex: "La Fiole d'Huile Sacrée"). Doit commencer par le nom de base.
-2. text_narratif : texte immersif de 3-4 phrases en français. La lettre cachée (${OBJECTS.map(o => o.hidden_letter).join(",")}) doit apparaître naturellement dans le texte.
-3. enigme : l'énigme ou description du défi (en français)
-4. answer : la réponse (mot simple, minuscules, en français). null pour les épreuves.
+═══ ÉTAPES 1 à 9 — Un objet physique par étape ═══
+Les objets dans l'ordre :
+${objectList}
 
-Retourne UNIQUEMENT du JSON valide :
+Pour chaque objet :
+- narrative_name: nom narratif immersif selon le thème (ex: "La Fiole d'Huile Sacrée"). Doit commencer par le nom de base.
+- text_narratif: 3-4 phrases immersives en français. La lettre cachée indiquée doit apparaître naturellement dans le texte.
+- type: "enigme" pour la plupart, "epreuve" pour La Clé (étape 4) et L'Amulette (étape 6)
+- enigme: l'énigme ou la description du défi physique
+- answer: la réponse (mot simple, minuscules). null pour les épreuves.
+
+═══ ÉTAPE 10 — Résolution finale ═══
+- text_narratif: conclusion dramatique (3-4 phrases) — les joueurs ont toutes les lettres et doivent assembler le mot secret LABYRINTH
+- type: "unlock"
+- enigme: null
+- answer: null
+- Lié au Coffret (OBJ-09)
+
+Retourne UNIQUEMENT du JSON valide avec exactement 11 éléments :
 {
-  "stages": [
+  "steps": [
     {
+      "step_index": 0,
+      "object_name": null,
+      "narrative_name": null,
+      "text_narratif": "...",
+      "type": "enigme",
+      "enigme": "...",
+      "answer": "..."
+    },
+    {
+      "step_index": 1,
       "object_name": "La Fiole",
       "narrative_name": "La Fiole ...",
       "text_narratif": "...",
       "type": "enigme",
       "enigme": "...",
       "answer": "..."
+    },
+    ...
+    {
+      "step_index": 10,
+      "object_name": "Le Coffret",
+      "narrative_name": null,
+      "text_narratif": "...",
+      "type": "unlock",
+      "enigme": null,
+      "answer": null
     }
   ]
 }
 
-IMPORTANT : exactement 9 stages, dans l'ordre des objets.`;
+IMPORTANT: exactement 11 éléments (step_index 0 à 10).`;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -105,64 +173,73 @@ IMPORTANT : exactement 9 stages, dans l'ordre des objets.`;
     }
 
     const scenario = JSON.parse(jsonMatch[0]);
-    const stages = scenario.stages as Array<Record<string, string>>;
+    const aiSteps = (scenario.steps ?? scenario.stages) as Array<Record<string, string | null>>;
 
-    if (!stages || stages.length < 9) {
+    if (!aiSteps || aiSteps.length < 11) {
       return NextResponse.json<ApiResponse>(
-        { data: null, error: `AI generated ${stages?.length ?? 0} stages instead of 9` },
+        { data: null, error: `AI generated ${aiSteps?.length ?? 0} steps instead of 11` },
         { status: 500 }
       );
     }
 
     // ── Persist to Supabase ──
-    const supabase = createServerClient();
-
-    // Get all objects for this session
-    const { data: dbObjects } = await supabase
-      .from("objects")
-      .select("id, physical_id, order")
-      .eq("session_id", session_id)
-      .order("order");
-
-    if (!dbObjects || dbObjects.length === 0) {
-      return NextResponse.json<ApiResponse>(
-        { data: null, error: "No objects found for this session" },
-        { status: 400 }
-      );
-    }
-
-    // Map physical_id to db object
-    const objByPhysical = new Map(dbObjects.map((o) => [o.physical_id, o]));
 
     // Delete existing steps for these objects
-    const objectIds = dbObjects.map((o) => o.id);
     await supabase.from("steps").delete().in("object_id", objectIds);
 
-    // Insert new steps and update narrative_names
     const stepsToInsert: Array<Record<string, unknown>> = [];
     const narrativeUpdates: Array<{ id: string; narrative_name: string }> = [];
 
-    for (let i = 0; i < Math.min(stages.length, 9); i++) {
-      const stage = stages[i];
-      const objInfo = OBJECTS[i];
-      const dbObj = objByPhysical.get(objInfo.physical_id);
-      if (!dbObj) continue;
+    for (const step of aiSteps) {
+      const stepIndex = Number(step.step_index ?? aiSteps.indexOf(step));
 
-      stepsToInsert.push({
-        object_id: dbObj.id,
-        text_narratif: stage.text_narratif ?? "",
-        enigme: stage.enigme ?? null,
-        answer: stage.type === "epreuve" ? null : (stage.answer ?? null),
-        type: stage.type ?? "enigme",
-        order: i + 1,
-      });
+      if (stepIndex === 0) {
+        // Step 0 — Introduction: store in session, not in steps table
+        await supabase
+          .from("sessions")
+          .update({
+            intro_text: step.text_narratif ?? null,
+            intro_enigme: step.enigme ?? null,
+            intro_answer: step.answer ?? null,
+          })
+          .eq("id", session_id);
 
-      if (stage.narrative_name) {
-        narrativeUpdates.push({ id: dbObj.id, narrative_name: stage.narrative_name });
+      } else if (stepIndex >= 1 && stepIndex <= 9) {
+        // Steps 1-9 — physical objects → insert into steps table
+        const objInfo = TEMPLATE_OBJECTS[stepIndex - 1];
+        const dbObj = objByPhysical.get(objInfo.physical_id);
+        if (!dbObj) continue;
+
+        const stepType = step.type === "epreuve" ? "epreuve" : "enigme";
+
+        stepsToInsert.push({
+          object_id: dbObj.id,
+          text_narratif: step.text_narratif ?? "",
+          enigme: step.enigme ?? null,
+          answer: stepType === "epreuve" ? null : (step.answer ?? null),
+          type: stepType,
+          order: stepIndex,
+        });
+
+        if (step.narrative_name) {
+          narrativeUpdates.push({ id: dbObj.id, narrative_name: step.narrative_name });
+        }
+
+      } else if (stepIndex === 10) {
+        // Step 10 — Unlock: the /unlock page handles this,
+        // but save the conclusion text as the Coffret's step narrative
+        const coffret = objByPhysical.get("OBJ-09");
+        if (coffret && step.text_narratif) {
+          // Update the Coffret object's description with the conclusion
+          await supabase
+            .from("objects")
+            .update({ description: step.text_narratif })
+            .eq("id", coffret.id);
+        }
       }
     }
 
-    // Batch insert steps
+    // Batch insert steps 1-9
     if (stepsToInsert.length > 0) {
       const { error: stepsErr } = await supabase.from("steps").insert(stepsToInsert);
       if (stepsErr) {
@@ -181,8 +258,10 @@ IMPORTANT : exactement 9 stages, dans l'ordre des objets.`;
         .eq("id", upd.id);
     }
 
+    console.log("Scenario generated:", stepsToInsert.length, "steps + intro persisted for session", session_id);
+
     return NextResponse.json<ApiResponse>({
-      data: { success: true, steps_count: stepsToInsert.length },
+      data: { success: true, steps_count: stepsToInsert.length + 2 }, // +2 for intro + unlock
       error: null,
     });
   } catch (err) {
