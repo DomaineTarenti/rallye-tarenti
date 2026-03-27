@@ -22,8 +22,9 @@ export default function ScanPage() {
   const [cameraError, setCameraError] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
 
-  const scannerRef = useRef<{ stop: () => Promise<void> } | null>(null);
+  const stoppedRef = useRef(false);
   const processingLock = useRef(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   // Wait for hydration
   useEffect(() => {
@@ -35,57 +36,51 @@ export default function ScanPage() {
     setReady(true);
   }, [hasHydrated, team, session, router]);
 
-  // Initialize camera scanner
+  // Initialize camera with @zxing/browser
   useEffect(() => {
     if (!ready || manualMode || scanResult || cameraError) return;
 
-    let instance: { stop: () => Promise<void> } | null = null;
-    let cancelled = false;
+    stoppedRef.current = false;
+    let controls: { stop: () => void } | null = null;
 
-    const startScanner = async () => {
+    const startScan = async () => {
       try {
-        const { Html5Qrcode } = await import("html5-qrcode");
-        if (cancelled) return;
+        const { BrowserMultiFormatReader } = await import("@zxing/browser");
+        if (stoppedRef.current) return;
 
-        const scanner = new Html5Qrcode("qr-reader");
-        instance = scanner;
-        scannerRef.current = scanner;
+        const codeReader = new BrowserMultiFormatReader();
+        const videoEl = videoRef.current;
+        if (!videoEl) return;
 
-        await scanner.start(
-          { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0, disableFlip: false },
-          async (decodedText: string) => {
-            // Stop scanner immediately on decode
-            try { await scanner.stop(); } catch { /* ignore */ }
-            instance = null;
-            scannerRef.current = null;
-            setScannerActive(false);
-            handleScanResult(decodedText);
-          },
-          () => {} // ignore per-frame errors
+        controls = await codeReader.decodeFromVideoDevice(
+          undefined, // default camera (rear on mobile)
+          videoEl,
+          (result, error) => {
+            if (result && !stoppedRef.current) {
+              stoppedRef.current = true;
+              controls?.stop();
+              setScannerActive(false);
+              handleScanResult(result.getText());
+            }
+            // Ignore per-frame decode errors (normal when no QR in view)
+          }
         );
 
-        if (!cancelled) setScannerActive(true);
+        if (!stoppedRef.current) setScannerActive(true);
       } catch (err) {
-        console.error("[SCANNER] Init error:", err);
-        if (!cancelled) {
+        console.error("[ZXING] Init error:", err);
+        if (!stoppedRef.current) {
           setCameraError(true);
           setManualMode(true);
         }
       }
     };
 
-    // Small delay to let the DOM mount the #qr-reader div
-    const timer = setTimeout(startScanner, 300);
+    startScan();
 
     return () => {
-      cancelled = true;
-      clearTimeout(timer);
-      if (instance) {
-        instance.stop().catch(() => {});
-        instance = null;
-      }
-      scannerRef.current = null;
+      stoppedRef.current = true;
+      controls?.stop();
     };
   }, [ready, manualMode, scanResult, cameraError]);
 
@@ -131,7 +126,7 @@ export default function ScanPage() {
       if (result.valid && result.step) {
         setCurrentStep(result.step);
         setTimeout(() => router.push("/play"), 1000);
-        return; // don't unlock — navigating away
+        return;
       }
     } catch (err) {
       console.error("[SCAN] Fetch error:", err);
@@ -142,7 +137,6 @@ export default function ScanPage() {
     setProcessing(false);
   }
 
-  // Loading
   if (!ready) {
     return (
       <main className="flex min-h-[100dvh] items-center justify-center bg-deep">
@@ -154,10 +148,11 @@ export default function ScanPage() {
   function handleRetry() {
     setScanResult(null);
     setManualCode("");
+    setCameraError(false);
     processingLock.current = false;
+    stoppedRef.current = false;
   }
 
-  // ── Result icons ──
   const resultIcon = scanResult?.valid
     ? <CheckCircle2 className="h-14 w-14 text-green-400" />
     : scanResult?.reason === "wrong_order"
@@ -185,7 +180,7 @@ export default function ScanPage() {
 
       <div className="flex flex-1 flex-col items-center justify-center px-4">
 
-        {/* ── Result ── */}
+        {/* Result */}
         {scanResult && (
           <Card className="mb-6 w-full max-w-sm bg-surface text-center">
             <div className="mb-3 flex justify-center">{resultIcon}</div>
@@ -204,13 +199,19 @@ export default function ScanPage() {
           </Card>
         )}
 
-        {/* ── Camera scanner ── */}
+        {/* Camera scanner */}
         {!scanResult && !manualMode && (
           <>
             <div className="relative mb-4 w-full max-w-sm overflow-hidden rounded-2xl bg-black">
-              <div id="qr-reader" style={{ width: "100%", minHeight: 300 }} />
+              <video
+                ref={videoRef}
+                style={{ width: "100%", minHeight: 300, objectFit: "cover" }}
+                autoPlay
+                playsInline
+                muted
+              />
 
-              {/* Animated corners overlay */}
+              {/* Animated corners */}
               {scannerActive && (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                   <div className="relative h-52 w-52">
@@ -233,7 +234,7 @@ export default function ScanPage() {
           </>
         )}
 
-        {/* ── Manual mode ── */}
+        {/* Manual mode */}
         {!scanResult && manualMode && (
           <Card className="mb-6 w-full max-w-sm bg-surface">
             <h2 className="mb-1 text-center font-bold">Enter Code</h2>
@@ -244,7 +245,7 @@ export default function ScanPage() {
               <Input
                 value={manualCode}
                 onChange={(e) => setManualCode(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === "Enter" && handleScanResult(manualCode.trim().toUpperCase())}
+                onKeyDown={(e) => e.key === "Enter" && manualCode.trim() && handleScanResult(manualCode.trim().toUpperCase())}
                 placeholder="OBJ-01"
                 maxLength={20}
                 className="bg-deep text-center font-mono tracking-widest"
@@ -262,7 +263,7 @@ export default function ScanPage() {
         {/* Mode toggle */}
         {!scanResult && (
           <button
-            onClick={() => { setManualMode(!manualMode); setCameraError(false); }}
+            onClick={() => { setManualMode(!manualMode); setCameraError(false); stoppedRef.current = true; }}
             className="mt-2 flex items-center gap-2 text-sm text-gray-500"
           >
             {manualMode
