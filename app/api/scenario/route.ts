@@ -3,7 +3,12 @@ import { createServerClient } from "@/lib/supabase";
 import type { ApiResponse } from "@/lib/types";
 import { TEMPLATE_OBJECTS } from "@/lib/constants";
 
-// POST /api/scenario — generate full 11-step scenario and persist to DB
+const MODEL = "claude-haiku-4-5-20251001";
+const MAX_TOKENS = 4000;
+const TIMEOUT_MS = 30_000;
+const MAX_RETRIES = 2;
+
+// POST /api/scenario — generate 11-step scenario in 2 batches and persist
 export async function POST(req: NextRequest) {
   const { session_id, theme, session_name } = await req.json();
 
@@ -24,17 +29,14 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServerClient();
 
-  // ── Get objects for this session, clone template if none exist ──
+  // ── Get or create objects ──
   let { data: dbObjects } = await supabase
     .from("objects")
     .select("id, physical_id, order")
     .eq("session_id", session_id)
     .order("order");
 
-  console.log("Session ID:", session_id, "— Objects found:", dbObjects?.length ?? 0);
-
   if (!dbObjects || dbObjects.length === 0) {
-    console.log("No objects — cloning template objects for session", session_id);
     const sessionPrefix = session_id.slice(0, 8);
     const newObjects = TEMPLATE_OBJECTS.map((obj, i) => ({
       session_id,
@@ -59,143 +61,62 @@ export async function POST(req: NextRequest) {
       );
     }
     dbObjects = inserted;
-    console.log("Cloned", inserted.length, "template objects");
   }
 
-  // Map physical_id to db object
   const objByPhysical = new Map(dbObjects.map((o) => [o.physical_id, o]));
   const objectIds = dbObjects.map((o) => o.id);
-
-  // ── AI generation prompt — 11 steps ──
-  const objectList = TEMPLATE_OBJECTS.map((o, i) =>
-    `${i + 1}. ${o.base_name} (lettre cachée: ${o.hidden_letter})${i === 3 || i === 5 ? " — TYPE ÉPREUVE" : ""}${i === 8 ? " — OBJET FINAL" : ""}`
-  ).join("\n");
-
-  const prompt = `Tu es un game designer créatif pour "The Quest", une chasse au trésor interactive.
-
-Session: "${session_name || "Untitled"}"
-Thème: "${theme || "A mysterious adventure"}"
-
-Tu dois générer EXACTEMENT 11 étapes. Pas 9, pas 10 — exactement 11.
-
-═══ ÉTAPE 0 — Introduction commune ═══
-- text_narratif: introduction immersive (4-5 phrases en français) qui plonge les joueurs dans l'univers
-- enigme: une première énigme simple commune à toutes les équipes
-- answer: réponse simple (1 mot en minuscules, lié au thème)
-- type: "enigme"
-- Pas d'objet physique associé
-
-═══ ÉTAPES 1 à 9 — Un objet physique par étape ═══
-Les objets dans l'ordre :
-${objectList}
-
-Pour chaque objet :
-- narrative_name: nom narratif immersif selon le thème (ex: "La Fiole d'Huile Sacrée"). Doit commencer par le nom de base.
-- text_narratif: 3-4 phrases immersives en français. La lettre cachée indiquée doit apparaître naturellement dans le texte.
-- type: "enigme" pour la plupart, "epreuve" pour La Clé (étape 4) et L'Amulette (étape 6)
-- enigme: l'énigme ou la description du défi physique
-- answer: la réponse (mot simple, minuscules). null pour les épreuves.
-
-═══ ÉTAPE 10 — Résolution finale ═══
-- text_narratif: conclusion dramatique (3-4 phrases) — les joueurs ont toutes les lettres et doivent assembler le mot secret LABYRINTH
-- type: "unlock"
-- enigme: null
-- answer: null
-- Lié au Coffret (OBJ-09)
-
-Retourne UNIQUEMENT du JSON valide avec exactement 11 éléments :
-{
-  "steps": [
-    {
-      "step_index": 0,
-      "object_name": null,
-      "narrative_name": null,
-      "text_narratif": "...",
-      "type": "enigme",
-      "enigme": "...",
-      "answer": "..."
-    },
-    {
-      "step_index": 1,
-      "object_name": "La Fiole",
-      "narrative_name": "La Fiole ...",
-      "text_narratif": "...",
-      "type": "enigme",
-      "enigme": "...",
-      "answer": "..."
-    },
-    ...
-    {
-      "step_index": 10,
-      "object_name": "Le Coffret",
-      "narrative_name": null,
-      "text_narratif": "...",
-      "type": "unlock",
-      "enigme": null,
-      "answer": null
-    }
-  ]
-}
-
-IMPORTANT: exactement 11 éléments (step_index 0 à 10).`;
+  const themeStr = theme || "A mysterious adventure";
+  const nameStr = session_name || "Untitled";
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 8192,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
+    // ── BATCH 1: Intro + steps 1-5 ──
+    const batch1 = await callAI(apiKey, `Tu es un game designer pour "The Quest", chasse au trésor interactive.
+Session: "${nameStr}" | Thème: "${themeStr}"
 
-    if (!res.ok) {
-      const err = await res.text();
+Génère exactement 6 étapes en JSON. Sois concis.
+
+ÉTAPE 0 — Intro: text_narratif (3 phrases), enigme (simple), answer (1 mot minuscule), type "enigme"
+ÉTAPE 1 — La Fiole (lettre L): narrative_name, text_narratif (2-3 phrases), enigme, answer, type "enigme"
+ÉTAPE 2 — Le Fragment (lettre A): narrative_name, text_narratif, enigme, answer, type "enigme"
+ÉTAPE 3 — Le Sceau (lettre B): narrative_name, text_narratif, enigme, answer, type "enigme"
+ÉTAPE 4 — La Clé (lettre Y): narrative_name, text_narratif, enigme (défi physique), answer null, type "epreuve"
+ÉTAPE 5 — Le Parchemin (lettre R): narrative_name, text_narratif, enigme, answer, type "enigme"
+
+JSON strict: {"steps":[{"step_index":0,"narrative_name":null,"text_narratif":"...","type":"enigme","enigme":"...","answer":"..."},...]}`);
+
+    // ── BATCH 2: Steps 6-10 ──
+    const batch2 = await callAI(apiKey, `Suite de la génération pour "${nameStr}" | Thème: "${themeStr}"
+
+Génère exactement 5 étapes en JSON. Sois concis.
+
+ÉTAPE 6 — L'Amulette (lettre I): narrative_name, text_narratif (2-3 phrases), enigme (défi cohésion), answer null, type "epreuve"
+ÉTAPE 7 — L'Urne (lettre N): narrative_name, text_narratif, enigme, answer, type "enigme"
+ÉTAPE 8 — Le Médaillon (lettre T): narrative_name, text_narratif, enigme, answer, type "enigme"
+ÉTAPE 9 — Le Coffret (lettre H): narrative_name, text_narratif, enigme finale, answer, type "enigme"
+ÉTAPE 10 — Résolution: text_narratif (conclusion dramatique, 2 phrases), type "unlock", enigme null, answer null
+
+JSON strict: {"steps":[{"step_index":6,"narrative_name":"...","text_narratif":"...","type":"epreuve","enigme":"...","answer":null},...]}`);
+
+    // ── Merge both batches ──
+    const allSteps = [...batch1, ...batch2];
+
+    if (allSteps.length < 11) {
       return NextResponse.json<ApiResponse>(
-        { data: null, error: `Claude API error: ${err}` },
-        { status: 500 }
-      );
-    }
-
-    const result = await res.json();
-    const text = result.content?.[0]?.text ?? "";
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return NextResponse.json<ApiResponse>(
-        { data: null, error: "Failed to parse AI response" },
-        { status: 500 }
-      );
-    }
-
-    const scenario = JSON.parse(jsonMatch[0]);
-    const aiSteps = (scenario.steps ?? scenario.stages) as Array<Record<string, string | null>>;
-
-    if (!aiSteps || aiSteps.length < 11) {
-      return NextResponse.json<ApiResponse>(
-        { data: null, error: `AI generated ${aiSteps?.length ?? 0} steps instead of 11` },
+        { data: null, error: `AI generated ${allSteps.length} steps instead of 11` },
         { status: 500 }
       );
     }
 
     // ── Persist to Supabase ──
-
-    // Delete existing steps for these objects
     await supabase.from("steps").delete().in("object_id", objectIds);
 
     const stepsToInsert: Array<Record<string, unknown>> = [];
     const narrativeUpdates: Array<{ id: string; narrative_name: string }> = [];
 
-    for (const step of aiSteps) {
-      const stepIndex = Number(step.step_index ?? aiSteps.indexOf(step));
+    for (const step of allSteps) {
+      const idx = Number(step.step_index ?? allSteps.indexOf(step));
 
-      if (stepIndex === 0) {
-        // Step 0 — Introduction: store in session, not in steps table
+      if (idx === 0) {
         await supabase
           .from("sessions")
           .update({
@@ -204,34 +125,27 @@ IMPORTANT: exactement 11 éléments (step_index 0 à 10).`;
             intro_answer: step.answer ?? null,
           })
           .eq("id", session_id);
-
-      } else if (stepIndex >= 1 && stepIndex <= 9) {
-        // Steps 1-9 — physical objects → insert into steps table
-        const objInfo = TEMPLATE_OBJECTS[stepIndex - 1];
+      } else if (idx >= 1 && idx <= 9) {
+        const objInfo = TEMPLATE_OBJECTS[idx - 1];
         const dbObj = objByPhysical.get(objInfo.physical_id);
         if (!dbObj) continue;
 
         const stepType = step.type === "epreuve" ? "epreuve" : "enigme";
-
         stepsToInsert.push({
           object_id: dbObj.id,
           text_narratif: step.text_narratif ?? "",
           enigme: step.enigme ?? null,
           answer: stepType === "epreuve" ? null : (step.answer ?? null),
           type: stepType,
-          order: stepIndex,
+          order: idx,
         });
 
         if (step.narrative_name) {
           narrativeUpdates.push({ id: dbObj.id, narrative_name: step.narrative_name });
         }
-
-      } else if (stepIndex === 10) {
-        // Step 10 — Unlock: the /unlock page handles this,
-        // but save the conclusion text as the Coffret's step narrative
+      } else if (idx === 10) {
         const coffret = objByPhysical.get("OBJ-09");
         if (coffret && step.text_narratif) {
-          // Update the Coffret object's description with the conclusion
           await supabase
             .from("objects")
             .update({ description: step.text_narratif })
@@ -240,7 +154,6 @@ IMPORTANT: exactement 11 éléments (step_index 0 à 10).`;
       }
     }
 
-    // Batch insert steps 1-9
     if (stepsToInsert.length > 0) {
       const { error: stepsErr } = await supabase.from("steps").insert(stepsToInsert);
       if (stepsErr) {
@@ -251,22 +164,18 @@ IMPORTANT: exactement 11 éléments (step_index 0 à 10).`;
       }
     }
 
-    // Update narrative_names on objects
     for (const upd of narrativeUpdates) {
-      await supabase
-        .from("objects")
-        .update({ narrative_name: upd.narrative_name })
-        .eq("id", upd.id);
+      await supabase.from("objects").update({ narrative_name: upd.narrative_name }).eq("id", upd.id);
     }
 
     // Auto-assign epreuve steps to guardians
-    const { data: insertedSteps } = await supabase
+    const { data: epreuveSteps } = await supabase
       .from("steps")
       .select("id, object_id, type")
       .in("object_id", objectIds)
       .eq("type", "epreuve");
 
-    if (insertedSteps && insertedSteps.length > 0) {
+    if (epreuveSteps && epreuveSteps.length > 0) {
       const { data: guardians } = await supabase
         .from("staff_members")
         .select("id")
@@ -274,17 +183,16 @@ IMPORTANT: exactement 11 éléments (step_index 0 à 10).`;
         .order("name");
 
       if (guardians) {
-        for (let i = 0; i < Math.min(insertedSteps.length, guardians.length); i++) {
+        for (let i = 0; i < Math.min(epreuveSteps.length, guardians.length); i++) {
           await supabase
             .from("staff_members")
-            .update({ assigned_step_id: insertedSteps[i].id })
+            .update({ assigned_step_id: epreuveSteps[i].id })
             .eq("id", guardians[i].id);
         }
-        console.log("Auto-assigned", Math.min(insertedSteps.length, guardians.length), "epreuve steps to guardians");
       }
     }
 
-    console.log("Scenario generated:", stepsToInsert.length, "steps + intro persisted for session", session_id);
+    console.log("Scenario generated:", stepsToInsert.length, "steps for session", session_id);
 
     return NextResponse.json<ApiResponse>({
       data: { success: true, steps_count: stepsToInsert.length + 2 },
@@ -298,5 +206,57 @@ IMPORTANT: exactement 11 éléments (step_index 0 à 10).`;
       },
       { status: 500 }
     );
+  }
+}
+
+// ── AI call helper with timeout + retry ──
+async function callAI(
+  apiKey: string,
+  prompt: string,
+  attempt = 0,
+): Promise<Array<Record<string, string | null>>> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        messages: [{ role: "user", content: prompt }],
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Claude API ${res.status}: ${err.slice(0, 200)}`);
+    }
+
+    const result = await res.json();
+    const text = result.content?.[0]?.text ?? "";
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("No JSON in AI response");
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    return (parsed.steps ?? parsed.stages ?? []) as Array<Record<string, string | null>>;
+  } catch (err) {
+    clearTimeout(timeout);
+
+    if (attempt < MAX_RETRIES) {
+      console.log(`[SCENARIO] Retry ${attempt + 1}/${MAX_RETRIES}:`, (err as Error).message);
+      return callAI(apiKey, prompt, attempt + 1);
+    }
+
+    throw err;
   }
 }
