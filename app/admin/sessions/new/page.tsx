@@ -25,6 +25,7 @@ export default function NewSessionPage() {
   const [duration, setDuration] = useState(60);
   const [theme, setTheme] = useState("");
   const [primaryColor, setPrimaryColor] = useState("#7F77DD");
+  const [teamCount, setTeamCount] = useState(10);
   const [secretWord, setSecretWord] = useState("LABYRINTH");
   const [secretWordError, setSecretWordError] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -62,6 +63,7 @@ export default function NewSessionPage() {
           theme: theme.trim() || null,
           duration_minutes: duration,
           primary_color: primaryColor,
+          team_count: teamCount,
           secret_word: secretWord.toUpperCase().trim(),
           logo_url: null, // TODO: upload to Supabase Storage
         }),
@@ -158,6 +160,28 @@ export default function NewSessionPage() {
                 <span key={m}>{m}m</span>
               ))}
             </div>
+          </div>
+
+          {/* Team count */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">
+              Number of Teams: <span className="font-bold text-indigo-600">{teamCount}</span>
+            </label>
+            <input
+              type="range"
+              min={1}
+              max={50}
+              step={1}
+              value={teamCount}
+              onChange={(e) => setTeamCount(Number(e.target.value))}
+              className="w-full accent-indigo-600"
+            />
+            <div className="mt-1 flex justify-between text-[10px] text-gray-400">
+              <span>1</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span>
+            </div>
+            <p className="mt-1 text-xs text-gray-400">
+              Teams will be pre-created with unique access codes
+            </p>
           </div>
 
           {/* Theme */}

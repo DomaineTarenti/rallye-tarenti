@@ -13,6 +13,7 @@ function JoinContent() {
   const params = useSearchParams();
   const router = useRouter();
   const code = params.get("code") ?? "";
+  const teamCode = params.get("team") ?? "";
 
   const setSession = usePlayerStore((s) => s.setSession);
   const setTeam = usePlayerStore((s) => s.setTeam);
@@ -22,6 +23,7 @@ function JoinContent() {
   const setProgress = usePlayerStore((s) => s.setProgress);
   const setCurrentStep = usePlayerStore((s) => s.setCurrentStep);
   const setCurrentStepIndex = usePlayerStore((s) => s.setCurrentStepIndex);
+  const setCollectedLetters = usePlayerStore((s) => s.setCollectedLetters);
   const storedSession = usePlayerStore((s) => s.session);
 
   const [session, setLocalSession] = useState<Session | null>(null);
@@ -34,8 +36,56 @@ function JoinContent() {
   const [recovering, setRecovering] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
 
+  // Join a pre-created team directly
+  async function joinPrecreatedTeam(accessCode: string) {
+    try {
+      const res = await fetch("/api/team/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_code: accessCode }),
+      });
+      const json: ApiResponse = await res.json();
+      if (!res.ok || json.error || !json.data) {
+        setError(json.error ?? "Team not found.");
+        setLoading(false);
+        return;
+      }
+      const data = json.data as Record<string, unknown>;
+      setSession(data.session as never);
+      setTeam(data.team as never);
+      setObjects(data.objects as never[]);
+      setSteps(data.steps as never[]);
+      setProgress(data.progress as never[]);
+      if ((data.team as Record<string, unknown>).collected_letters) {
+        setCollectedLetters((data.team as Record<string, unknown>).collected_letters as Record<string, string>);
+      }
+
+      const stepsArr = data.steps as Array<Record<string, unknown>>;
+      if (stepsArr.length > 0) setCurrentStep(stepsArr[0] as never);
+
+      // Go to character selection (simplified — just pick animal/color)
+      router.push("/character");
+    } catch {
+      setError("Connection error.");
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
+    // If a team code is provided, join directly
+    if (teamCode) {
+      joinPrecreatedTeam(teamCode);
+      return;
+    }
+
     if (!code) { setError("No Access Key provided."); setLoading(false); return; }
+
+    // Check if code looks like a team access code (e.g., SMU01)
+    const isTeamCode = /^[A-Z]{3}\d{2}$/i.test(code.trim());
+    if (isTeamCode) {
+      joinPrecreatedTeam(code.trim().toUpperCase());
+      return;
+    }
 
     if (storedSession && storedSession.code === code.toUpperCase()) {
       setLocalSession(storedSession);
@@ -71,7 +121,7 @@ function JoinContent() {
     }
     fetchSession();
     return () => { cancelled = true; };
-  }, [code, storedSession, setSession]);
+  }, [code, teamCode, storedSession, setSession]);
 
   async function handleRecover() {
     if (!recoveryCode.trim() || !session) return;

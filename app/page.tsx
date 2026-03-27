@@ -1,13 +1,26 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { Compass } from "lucide-react";
 
-export default function HomePage() {
+function HomeContent() {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const params = useSearchParams();
+
+  // Auto-redirect if URL has ?code= or ?team= params (from QR code scan)
+  useEffect(() => {
+    const urlCode = params.get("code");
+    const urlTeam = params.get("team");
+    if (urlTeam) {
+      router.push(`/join?team=${encodeURIComponent(urlTeam)}${urlCode ? `&code=${encodeURIComponent(urlCode)}` : ""}`);
+    } else if (urlCode) {
+      router.push(`/join?code=${encodeURIComponent(urlCode)}`);
+    }
+  }, [params, router]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,8 +59,20 @@ export default function HomePage() {
       </form>
 
       <p className="mt-8 text-sm text-gray-600">
-        Enter the Access Key provided by your organiser
+        Enter the Access Key or Team Code
       </p>
     </main>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={
+      <main className="flex min-h-[100dvh] items-center justify-center">
+        <p className="text-gray-500">Loading...</p>
+      </main>
+    }>
+      <HomeContent />
+    </Suspense>
   );
 }

@@ -174,6 +174,49 @@ export async function POST(req: NextRequest) {
     console.error("Failed to create default staff:", staffErr.message);
   }
 
+  // Pre-create teams if team_count > 0
+  const teamCount = body.team_count ?? 0;
+  if (teamCount > 0) {
+    // Get freshly created objects for this session
+    const { data: sessionObjects } = await supabase
+      .from("objects")
+      .select("id, is_final")
+      .eq("session_id", data.id)
+      .order("order");
+
+    if (sessionObjects && sessionObjects.length > 0) {
+      const nonFinal = sessionObjects.filter((o) => !o.is_final);
+      const final = sessionObjects.find((o) => o.is_final);
+      const codePrefix = data.code.slice(0, 3).toUpperCase();
+
+      const teamsToInsert = Array.from({ length: teamCount }, (_, i) => {
+        // Fisher-Yates shuffle
+        const shuffled = [...nonFinal];
+        for (let j = shuffled.length - 1; j > 0; j--) {
+          const k = Math.floor(Math.random() * (j + 1));
+          [shuffled[j], shuffled[k]] = [shuffled[k], shuffled[j]];
+        }
+        if (final) shuffled.push(final);
+
+        return {
+          session_id: data.id,
+          name: `Équipe ${i + 1}`,
+          status: "waiting",
+          object_order: shuffled.map((o) => o.id),
+          access_code: `${codePrefix}${String(i + 1).padStart(2, "0")}`,
+          is_precreated: true,
+        };
+      });
+
+      const { error: teamsErr } = await supabase.from("teams").insert(teamsToInsert);
+      if (teamsErr) {
+        console.error("Failed to pre-create teams:", teamsErr.message);
+      } else {
+        console.log("Pre-created", teamCount, "teams for session", data.code);
+      }
+    }
+  }
+
   return NextResponse.json<ApiResponse<Session>>(
     { data, error: null },
     { status: 201 }

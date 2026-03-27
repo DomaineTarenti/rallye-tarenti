@@ -82,6 +82,8 @@ export interface Team {
   locked: boolean;
   object_order: string[];
   collected_letters: Record<string, string>;
+  access_code: string | null;
+  is_precreated: boolean;
   created_at: string;
 }
 

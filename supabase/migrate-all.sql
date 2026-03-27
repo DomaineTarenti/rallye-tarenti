@@ -20,6 +20,10 @@ ALTER TABLE sessions ADD COLUMN IF NOT EXISTS intro_answer text;
 ALTER TABLE objects ADD COLUMN IF NOT EXISTS hidden_letter char(1);
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS secret_word text DEFAULT 'LABYRINTH';
 ALTER TABLE teams ADD COLUMN IF NOT EXISTS collected_letters jsonb DEFAULT '{}';
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS team_count integer DEFAULT 0;
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS access_code text;
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS is_precreated boolean DEFAULT false;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_access_code ON teams(access_code) WHERE access_code IS NOT NULL;
 
 -- ─── Team messages table ────────────────────────────────────
 CREATE TABLE IF NOT EXISTS team_messages (

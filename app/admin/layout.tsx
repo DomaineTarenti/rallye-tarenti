@@ -30,6 +30,7 @@ export default function AdminLayout({
 
   const sessionSubnav = sessionId && !isNewSession ? [
     { label: "Configure", href: `/admin/sessions/${sessionId}` },
+    { label: "Teams", href: `/admin/sessions/${sessionId}/teams` },
     { label: "Live", href: `/admin/sessions/${sessionId}/live` },
     { label: "Staff", href: `/admin/sessions/${sessionId}/staff` },
     { label: "Results", href: `/admin/sessions/${sessionId}/results` },
