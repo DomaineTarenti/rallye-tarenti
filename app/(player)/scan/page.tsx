@@ -34,6 +34,7 @@ export default function ScanPage() {
   const [cameraError, setCameraError] = useState<string | null>(null);
 
   const scannerRef = useRef<HTMLDivElement>(null);
+  const html5QrCodeRef = useRef<{ stop: () => Promise<void> } | null>(null);
   const processingRef = useRef(false);
 
   // Wait for Zustand to hydrate from localStorage, THEN check team/session
@@ -84,25 +85,37 @@ export default function ScanPage() {
           }),
         });
 
-        const json: ApiResponse<ScanResult> = await res.json();
+        const json = await res.json();
         console.log("[SCAN FRONT] API response:", JSON.stringify(json));
 
-        const result = json.data;
+        // Handle both { data: { valid, ... } } and direct { valid, ... }
+        const result: ScanResult | null = json.data ?? json;
 
-        if (!result) {
+        if (!result || result.valid === undefined) {
           setScanResult({ valid: false, reason: "unknown", message: json.error ?? "Server communication error." });
-        } else {
-          setScanResult(result);
-
-          if (result.valid && result.step) {
-            setCurrentStep(result.step);
-            setTimeout(() => router.push("/play"), 1500);
-          }
+          processingRef.current = false;
+          setProcessing(false);
+          return;
         }
+
+        setScanResult(result);
+
+        if (result.valid && result.step) {
+          // Stop QR scanner immediately to prevent double scans
+          try { await html5QrCodeRef.current?.stop(); } catch { /* ignore */ }
+
+          setCurrentStep(result.step);
+          console.log("[SCAN FRONT] Valid scan — navigating to /play");
+          // Short delay to show success UI, then navigate
+          setTimeout(() => router.push("/play"), 1200);
+          return; // don't reset processingRef — we're navigating away
+        }
+
+        processingRef.current = false;
+        setProcessing(false);
       } catch (err) {
         console.error("[SCAN FRONT] Fetch error:", err);
         setScanResult({ valid: false, reason: "unknown", message: "Connection error. Check your network." });
-      } finally {
         processingRef.current = false;
         setProcessing(false);
       }
@@ -123,6 +136,7 @@ export default function ScanPage() {
         if (!alive) return;
 
         html5QrCode = new Html5Qrcode("qr-reader");
+        html5QrCodeRef.current = html5QrCode;
 
         await html5QrCode.start(
           { facingMode: "environment" },

@@ -45,14 +45,28 @@ export async function GET(req: NextRequest) {
     steps = data ?? [];
   }
 
-  // Sort steps by object order then step order
-  const objectOrderMap = new Map(objects.map((o) => [o.id, o.order]));
-  steps.sort((a, b) => {
-    const oa = objectOrderMap.get(a.object_id as string) ?? 0;
-    const ob = objectOrderMap.get(b.object_id as string) ?? 0;
-    if (oa !== ob) return oa - ob;
-    return ((a.order as number) ?? 0) - ((b.order as number) ?? 0);
-  });
+  // Sort steps by the TEAM's object_order (randomized per team), not DB order
+  const team = teamRes.data;
+  const teamObjectOrder: string[] = team?.object_order ?? [];
+
+  if (teamObjectOrder.length > 0) {
+    const orderIdx = new Map(teamObjectOrder.map((id: string, idx: number) => [id, idx]));
+    steps.sort((a, b) => {
+      const oa = orderIdx.get(a.object_id as string) ?? 999;
+      const ob = orderIdx.get(b.object_id as string) ?? 999;
+      if (oa !== ob) return oa - ob;
+      return ((a.order as number) ?? 0) - ((b.order as number) ?? 0);
+    });
+  } else {
+    // Fallback: sort by DB object order
+    const objectOrderMap = new Map(objects.map((o) => [o.id, o.order]));
+    steps.sort((a, b) => {
+      const oa = objectOrderMap.get(a.object_id as string) ?? 0;
+      const ob = objectOrderMap.get(b.object_id as string) ?? 0;
+      if (oa !== ob) return oa - ob;
+      return ((a.order as number) ?? 0) - ((b.order as number) ?? 0);
+    });
+  }
 
   // Calculate score
   const progress = progressRes.data ?? [];
