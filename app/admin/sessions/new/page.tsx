@@ -25,12 +25,14 @@ export default function NewSessionPage() {
   const [duration, setDuration] = useState(60);
   const [theme, setTheme] = useState("");
   const [primaryColor, setPrimaryColor] = useState("#7F77DD");
+  const [secretWord, setSecretWord] = useState("LABYRINTH");
+  const [secretWordError, setSecretWordError] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [languages, setLanguages] = useState<string[]>(["FR"]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = name.trim().length >= 2 && code.trim().length >= 3;
+  const canSubmit = name.trim().length >= 2 && code.trim().length >= 3 && !secretWordError;
 
   function toggleLang(lang: string) {
     setLanguages((prev) =>
@@ -60,6 +62,7 @@ export default function NewSessionPage() {
           theme: theme.trim() || null,
           duration_minutes: duration,
           primary_color: primaryColor,
+          secret_word: secretWord.toUpperCase().trim(),
           logo_url: null, // TODO: upload to Supabase Storage
         }),
       });
@@ -170,6 +173,38 @@ export default function NewSessionPage() {
               maxLength={300}
               className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             />
+          </div>
+
+          {/* Secret word */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">
+              Secret Word
+            </label>
+            <input
+              type="text"
+              value={secretWord}
+              onChange={(e) => {
+                const val = e.target.value.toUpperCase().replace(/[^A-Z]/g, "");
+                setSecretWord(val);
+                if (val.length !== 9) {
+                  setSecretWordError("Must be exactly 9 letters");
+                } else if (new Set(val).size !== 9) {
+                  setSecretWordError("All 9 letters must be unique");
+                } else {
+                  setSecretWordError(null);
+                }
+              }}
+              maxLength={9}
+              placeholder="LABYRINTH"
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 font-mono text-lg tracking-[0.3em] text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            />
+            {secretWordError ? (
+              <p className="mt-1 text-xs text-red-500">{secretWordError}</p>
+            ) : (
+              <p className="mt-1 text-xs text-gray-400">
+                This word will be revealed letter by letter as players complete each stage
+              </p>
+            )}
           </div>
 
           {/* Logo upload */}

@@ -7,13 +7,13 @@ INSERT INTO organizations (id, name, slug, primary_color)
 VALUES ('a1b2c3d4-0001-4000-8000-000000000001', 'Domaine Tarenti', 'tarenti', '#C4622D')
 ON CONFLICT (slug) DO NOTHING;
 
-INSERT INTO sessions (id, org_id, name, code, status, theme, duration_minutes, primary_color, started_at, intro_text)
+INSERT INTO sessions (id, org_id, name, code, status, theme, duration_minutes, primary_color, secret_word, started_at, intro_text)
 VALUES (
   'b1b2c3d4-0001-4000-8000-000000000001',
   'a1b2c3d4-0001-4000-8000-000000000001',
   'Tarenti Mysteria', 'TARENTI24', 'active',
   'An ancient Mediterranean mystery among olive groves and sun-bleached ruins',
-  90, '#C4622D', now(),
+  90, '#C4622D', 'LABYRINTH', now(),
   'Les collines de Tarenti murmurent un secret vieux de mille ans. Quelque part entre les oliviers centenaires et les ruines blanchies par le soleil, neuf artefacts attendent d''être découverts. Chacun porte un fragment de vérité laissé par Aristide, le dernier gardien. Votre quête commence maintenant — suivez les indices et que le premier artefact vous révèle le chemin.'
 ) ON CONFLICT (code) DO UPDATE SET status='active', started_at=now(), intro_text=EXCLUDED.intro_text;
 
@@ -25,16 +25,16 @@ DELETE FROM objects WHERE session_id = 'b1b2c3d4-0001-4000-8000-000000000001';
 
 -- ─── 9 Permanent Objects ────────────────────────────────────
 
-INSERT INTO objects (id, session_id, name, qr_code_id, physical_id, "order", description, is_final, narrative_name) VALUES
-('c1000000-0001-4000-8000-000000000001', 'b1b2c3d4-0001-4000-8000-000000000001', 'La Fiole',        'QR-OBJ-01-KRTM', 'OBJ-01', 1, 'Une petite fiole cylindrique en résine translucide', false, 'La Fiole d''Huile Sacrée'),
-('c1000000-0002-4000-8000-000000000002', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Fragment',     'QR-OBJ-02-WFNL', 'OBJ-02', 2, 'Un fragment ancien en résine texturée', false, 'Le Fragment de Mosaïque Brisée'),
-('c1000000-0003-4000-8000-000000000003', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Sceau',        'QR-OBJ-03-PXVD', 'OBJ-03', 3, 'Un sceau circulaire en résine avec motif gravé', false, 'Le Sceau du Proconsul'),
-('c1000000-0004-4000-8000-000000000004', 'b1b2c3d4-0001-4000-8000-000000000001', 'La Clé',          'QR-OBJ-04-HTJQ', 'OBJ-04', 4, 'Une grande clé ancienne en résine avec anneau décoratif', false, 'La Clé du Sanctuaire'),
-('c1000000-0005-4000-8000-000000000005', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Parchemin',    'QR-OBJ-05-BMGS', 'OBJ-05', 5, 'Un rouleau miniature en résine, comme un parchemin ancien', false, 'Le Parchemin du Géographe'),
-('c1000000-0006-4000-8000-000000000006', 'b1b2c3d4-0001-4000-8000-000000000001', 'L''Amulette',     'QR-OBJ-06-RLZN', 'OBJ-06', 6, 'Une amulette ovale en résine texturée', false, 'L''Amulette de la Déesse Tanit'),
-('c1000000-0007-4000-8000-000000000007', 'b1b2c3d4-0001-4000-8000-000000000001', 'L''Urne',         'QR-OBJ-07-YCAK', 'OBJ-07', 7, 'Une petite urne grecque en résine avec motifs en relief', false, 'L''Urne des Cendres Oubliées'),
-('c1000000-0008-4000-8000-000000000008', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Médaillon',    'QR-OBJ-08-DXFP', 'OBJ-08', 8, 'Un médaillon circulaire en résine dorée', false, 'Le Médaillon du Dernier Gardien'),
-('c1000000-0009-4000-8000-000000000009', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Coffret',      'QR-OBJ-09-MNQT', 'OBJ-09', 9, 'Un coffret ancien en résine ornementée — le trésor ultime', true, 'Le Coffret des Secrets de Tarenti');
+INSERT INTO objects (id, session_id, name, qr_code_id, physical_id, "order", description, is_final, narrative_name, hidden_letter) VALUES
+('c1000000-0001-4000-8000-000000000001', 'b1b2c3d4-0001-4000-8000-000000000001', 'La Fiole',        'QR-OBJ-01-KRTM', 'OBJ-01', 1, 'Une petite fiole cylindrique en résine translucide', false, 'La Fiole d''Huile Sacrée', 'L'),
+('c1000000-0002-4000-8000-000000000002', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Fragment',     'QR-OBJ-02-WFNL', 'OBJ-02', 2, 'Un fragment ancien en résine texturée', false, 'Le Fragment de Mosaïque Brisée', 'A'),
+('c1000000-0003-4000-8000-000000000003', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Sceau',        'QR-OBJ-03-PXVD', 'OBJ-03', 3, 'Un sceau circulaire en résine avec motif gravé', false, 'Le Sceau du Proconsul', 'B'),
+('c1000000-0004-4000-8000-000000000004', 'b1b2c3d4-0001-4000-8000-000000000001', 'La Clé',          'QR-OBJ-04-HTJQ', 'OBJ-04', 4, 'Une grande clé ancienne en résine avec anneau décoratif', false, 'La Clé du Sanctuaire', 'Y'),
+('c1000000-0005-4000-8000-000000000005', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Parchemin',    'QR-OBJ-05-BMGS', 'OBJ-05', 5, 'Un rouleau miniature en résine, comme un parchemin ancien', false, 'Le Parchemin du Géographe', 'R'),
+('c1000000-0006-4000-8000-000000000006', 'b1b2c3d4-0001-4000-8000-000000000001', 'L''Amulette',     'QR-OBJ-06-RLZN', 'OBJ-06', 6, 'Une amulette ovale en résine texturée', false, 'L''Amulette de la Déesse Tanit', 'I'),
+('c1000000-0007-4000-8000-000000000007', 'b1b2c3d4-0001-4000-8000-000000000001', 'L''Urne',         'QR-OBJ-07-YCAK', 'OBJ-07', 7, 'Une petite urne grecque en résine avec motifs en relief', false, 'L''Urne des Cendres Oubliées', 'N'),
+('c1000000-0008-4000-8000-000000000008', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Médaillon',    'QR-OBJ-08-DXFP', 'OBJ-08', 8, 'Un médaillon circulaire en résine dorée', false, 'Le Médaillon du Dernier Gardien', 'T'),
+('c1000000-0009-4000-8000-000000000009', 'b1b2c3d4-0001-4000-8000-000000000001', 'Le Coffret',      'QR-OBJ-09-MNQT', 'OBJ-09', 9, 'Un coffret ancien en résine ornementée — le trésor ultime', true, 'Le Coffret des Secrets de Tarenti', 'H');
 
 -- ─── 9 Steps ────────────────────────────────────────────────
 

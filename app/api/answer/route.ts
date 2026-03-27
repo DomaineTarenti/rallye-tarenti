@@ -36,7 +36,14 @@ export async function POST(req: NextRequest) {
   const correct = normalize(step.answer ?? "") === normalize(String(answer));
 
   if (correct) {
-    // 3. Mark step as completed
+    // 3. Get the object to return hidden_letter
+    const { data: objectData } = await supabase
+      .from("objects")
+      .select("physical_id, hidden_letter")
+      .eq("id", step.object_id)
+      .single();
+
+    // 4. Mark step as completed
     await supabase
       .from("team_progress")
       .update({
@@ -85,12 +92,13 @@ export async function POST(req: NextRequest) {
         .eq("id", team_id);
     }
 
-    const result: AnswerResult = {
-      correct: true,
-      message: "Bonne réponse ! Bravo !",
-    };
-    return NextResponse.json<ApiResponse<AnswerResult>>({
-      data: result,
+    return NextResponse.json<ApiResponse>({
+      data: {
+        correct: true,
+        message: "Bonne réponse ! Bravo !",
+        hidden_letter: objectData?.hidden_letter ?? null,
+        physical_id: objectData?.physical_id ?? null,
+      },
       error: null,
     });
   }

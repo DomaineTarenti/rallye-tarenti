@@ -21,6 +21,7 @@ export interface Session {
   duration_minutes: number;
   logo_url: string | null;
   primary_color: string | null;
+  secret_word: string | null;
   created_at: string;
   started_at: string | null;
   intro_text: string | null;
@@ -40,6 +41,7 @@ export interface QuestObject {
   is_final: boolean;
   physical_id: string | null;
   narrative_name: string | null;
+  hidden_letter: string | null;
   created_at: string;
 }
 
@@ -77,6 +79,7 @@ export interface Team {
   certificate_url: string | null;
   locked: boolean;
   object_order: string[];
+  collected_letters: Record<string, string>;
   created_at: string;
 }
 

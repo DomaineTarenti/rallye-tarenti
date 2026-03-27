@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Hexagon, MapPin, Send, ImageIcon, ShieldCheck, Lightbulb, QrCode, X, Trophy, MessageSquare, Compass, Search,
+  Hexagon, MapPin, Send, ImageIcon, ShieldCheck, Lightbulb, QrCode, X, Trophy, MessageSquare, Compass, Search, BookOpen,
 } from "lucide-react";
 import { Button, Card, Loader } from "@/components/shared";
 import { usePlayerStore } from "@/lib/store";
@@ -47,6 +47,9 @@ export default function PlayPage() {
   const setScore = usePlayerStore((s) => s.setScore);
   const setCurrentStepScore = usePlayerStore((s) => s.setCurrentStepScore);
   const setStepStartTime = usePlayerStore((s) => s.setStepStartTime);
+  const collectedLetters = usePlayerStore((s) => s.collectedLetters);
+  const setCollectedLetters = usePlayerStore((s) => s.setCollectedLetters);
+  const setTeam = usePlayerStore((s) => s.setTeam);
 
   const [answer, setAnswer] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -58,6 +61,7 @@ export default function PlayPage() {
   const [loadingGame, setLoadingGame] = useState(false);
   const [photoExpanded, setPhotoExpanded] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"play" | "journal">("play");
 
   // Realtime admin messages
   useEffect(() => {
@@ -91,6 +95,10 @@ export default function PlayPage() {
         if (active) {
           const s = stepsList.find((s) => s.id === active.step_id);
           if (s) { setCurrentStep(s); setCurrentStepIndex(stepsList.indexOf(s)); }
+        }
+        // Load collected letters from team
+        if (d.team && (d.team as Record<string, unknown>).collected_letters) {
+          setCollectedLetters((d.team as Record<string, unknown>).collected_letters as Record<string, string>);
         }
       }
     } catch { /* cache */ } finally { setLoadingGame(false); }
@@ -168,7 +176,7 @@ export default function PlayPage() {
         body: JSON.stringify({ team_id: team!.id, step_id: step.id, answer: answer.trim() }),
       });
       const json: ApiResponse = await res.json();
-      const result = json.data as { correct: boolean; message: string } | null;
+      const result = json.data as { correct: boolean; message: string; hidden_letter?: string; physical_id?: string } | null;
 
       if (result?.correct) {
         const updated = progress.map((p) =>
@@ -266,8 +274,54 @@ export default function PlayPage() {
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/5">
           <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${(currentStepIndex / steps.length) * 100}%` }} />
         </div>
+
+        {/* Tab bar */}
+        <div className="mt-2 flex gap-1">
+          <button
+            onClick={() => setActiveTab("play")}
+            className={`flex-1 rounded-lg py-1.5 text-[10px] font-semibold uppercase tracking-wider transition ${activeTab === "play" ? "bg-white/10 text-white" : "text-gray-500"}`}
+          >
+            Quest
+          </button>
+          <button
+            onClick={() => setActiveTab("journal")}
+            className={`flex flex-1 items-center justify-center gap-1 rounded-lg py-1.5 text-[10px] font-semibold uppercase tracking-wider transition ${activeTab === "journal" ? "bg-white/10 text-white" : "text-gray-500"}`}
+          >
+            <BookOpen className="h-3 w-3" /> Journal
+          </button>
+        </div>
       </div>
 
+      {/* Journal tab */}
+      {activeTab === "journal" ? (
+        <div className="flex-1 px-4 pt-4">
+          <Card className="bg-surface">
+            <h2 className="mb-3 text-center text-sm font-bold text-white">The Labyrinth Clues</h2>
+            <div className="mb-4 flex justify-center gap-1.5">
+              {objects.map((obj) => {
+                const letter = obj.physical_id ? collectedLetters[obj.physical_id] : null;
+                return (
+                  <div
+                    key={obj.id}
+                    className={`flex h-9 w-9 items-center justify-center rounded-lg text-sm font-black ${
+                      letter
+                        ? "text-white"
+                        : "border border-white/10 bg-white/5 text-gray-600"
+                    }`}
+                    style={letter ? { backgroundColor: teamColor } : undefined}
+                  >
+                    {letter ?? "?"}
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-center text-xs text-gray-500">
+              {Object.keys(collectedLetters).length} / {objects.length} clues collected
+            </p>
+          </Card>
+        </div>
+      ) : (
+      <>
       <div className="flex-1 space-y-4 px-4 pt-4">
         {/* Narrative */}
         <div className="rounded-2xl border border-white/5 bg-surface p-5" style={{ borderLeftWidth: 3, borderLeftColor: teamColor }}>
@@ -404,6 +458,8 @@ export default function PlayPage() {
           <span className="truncate">Scan: {objectName}</span>
         </Button>
       </div>
+      </>
+      )}
     </main>
   );
 }

@@ -15,6 +15,9 @@ ALTER TABLE teams ADD COLUMN IF NOT EXISTS locked boolean DEFAULT false;
 ALTER TABLE staff_members ADD COLUMN IF NOT EXISTS validation_code text;
 ALTER TABLE staff_members ADD COLUMN IF NOT EXISTS teams_validated integer DEFAULT 0;
 ALTER TABLE objects ADD COLUMN IF NOT EXISTS narrative_name text;
+ALTER TABLE objects ADD COLUMN IF NOT EXISTS hidden_letter char(1);
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS secret_word text DEFAULT 'LABYRINTH';
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS collected_letters jsonb DEFAULT '{}';
 
 -- ─── Team messages table ────────────────────────────────────
 CREATE TABLE IF NOT EXISTS team_messages (
