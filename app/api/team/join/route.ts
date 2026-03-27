@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
   if (teamErr || !team) {
     return NextResponse.json<ApiResponse>(
-      { data: null, error: "Team code not found." },
+      { data: null, error: "Code not recognized. Check your Access Key or Team Code." },
       { status: 404 }
     );
   }

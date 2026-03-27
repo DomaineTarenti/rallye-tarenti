@@ -46,7 +46,7 @@ function JoinContent() {
       });
       const json: ApiResponse = await res.json();
       if (!res.ok || json.error || !json.data) {
-        setError(json.error ?? "Team not found.");
+        setError("Session or team not found. Check your code.");
         setLoading(false);
         return;
       }
@@ -80,13 +80,6 @@ function JoinContent() {
 
     if (!code) { setError("No Access Key provided."); setLoading(false); return; }
 
-    // Check if code looks like a team access code (e.g., SMU01)
-    const isTeamCode = /^[A-Z]{3}\d{2}$/i.test(code.trim());
-    if (isTeamCode) {
-      joinPrecreatedTeam(code.trim().toUpperCase());
-      return;
-    }
-
     if (storedSession && storedSession.code === code.toUpperCase()) {
       setLocalSession(storedSession);
       if (storedSession.primary_color || storedSession.logo_url) applySessionTheme(storedSession);
@@ -101,8 +94,8 @@ function JoinContent() {
         const json: ApiResponse<Session> = await res.json();
         if (cancelled) return;
         if (!res.ok || json.error || !json.data) {
-          setError(json.error ?? "Session not found.");
-          setLoading(false);
+          // Session not found — try as team access code
+          joinPrecreatedTeam(code.trim().toUpperCase());
           return;
         }
         const s = json.data;
