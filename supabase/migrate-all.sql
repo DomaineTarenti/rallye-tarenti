@@ -92,6 +92,10 @@ DROP POLICY IF EXISTS "Scoring config updatable by all" ON scoring_config;
 CREATE POLICY "Scoring config insertable by all" ON scoring_config FOR INSERT WITH CHECK (true);
 CREATE POLICY "Scoring config updatable by all" ON scoring_config FOR UPDATE USING (true);
 
+-- Teams
+DROP POLICY IF EXISTS "Teams updatable by all" ON teams;
+CREATE POLICY "Teams updatable by all" ON teams FOR UPDATE USING (true) WITH CHECK (true);
+
 -- Organizations
 DROP POLICY IF EXISTS "Organizations insertable by all" ON organizations;
 CREATE POLICY "Organizations insertable by all" ON organizations FOR INSERT WITH CHECK (true);

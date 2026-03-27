@@ -2,6 +2,38 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import type { ApiResponse } from "@/lib/types";
 
+// GET /api/team/join?access_code=SMU01 — look up a pre-created team
+export async function GET(req: NextRequest) {
+  const accessCode = req.nextUrl.searchParams.get("access_code");
+
+  if (!accessCode) {
+    return NextResponse.json<ApiResponse>(
+      { data: null, error: "access_code required" },
+      { status: 400 }
+    );
+  }
+
+  const supabase = createServerClient();
+
+  const { data: team, error: teamErr } = await supabase
+    .from("teams")
+    .select("*, sessions(*)")
+    .eq("access_code", accessCode.toUpperCase().trim())
+    .single();
+
+  if (teamErr || !team) {
+    return NextResponse.json<ApiResponse>(
+      { data: null, error: "Team code not found." },
+      { status: 404 }
+    );
+  }
+
+  return NextResponse.json<ApiResponse>({
+    data: { team: { ...team, sessions: undefined }, session: team.sessions },
+    error: null,
+  });
+}
+
 // POST /api/team/join — join a pre-created team by access_code
 export async function POST(req: NextRequest) {
   const { access_code, name, character } = await req.json();

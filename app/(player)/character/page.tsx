@@ -36,6 +36,7 @@ function generateTeamCode(animalCode: string): string {
 export default function CharacterPage() {
   const router = useRouter();
   const session = usePlayerStore((s) => s.session);
+  const existingTeam = usePlayerStore((s) => s.team);
   const setTeam = usePlayerStore((s) => s.setTeam);
   const setTeamCharacter = usePlayerStore((s) => s.setTeamCharacter);
   const setSteps = usePlayerStore((s) => s.setSteps);
@@ -43,7 +44,10 @@ export default function CharacterPage() {
   const setProgress = usePlayerStore((s) => s.setProgress);
   const setCurrentStep = usePlayerStore((s) => s.setCurrentStep);
 
-  const [teamName, setTeamName] = useState("");
+  // If team already exists (pre-created), pre-fill the name
+  const isPrecreated = !!existingTeam?.is_precreated;
+
+  const [teamName, setTeamName] = useState(existingTeam?.name ?? "");
   const [selectedAnimal, setSelectedAnimal] = useState<(typeof ANIMALS)[number] | null>(null);
   const [selectedColor, setSelectedColor] = useState<(typeof ASTRAL_HUES)[number] | null>(null);
   const [warCry, setWarCry] = useState("");
@@ -79,7 +83,10 @@ export default function CharacterPage() {
     setLoading(true);
     setError(null);
 
-    const code = generateTeamCode(selectedAnimal.code);
+    const code = isPrecreated
+      ? (existingTeam?.access_code ?? generateTeamCode(selectedAnimal.code))
+      : generateTeamCode(selectedAnimal.code);
+
     const character: TeamCharacter = {
       animal: selectedAnimal.id,
       animalEmoji: selectedAnimal.emoji,
@@ -89,32 +96,63 @@ export default function CharacterPage() {
     };
 
     try {
-      const res = await fetch("/api/team", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          session_id: sessionId,
-          name: teamName.trim(),
-          character: JSON.stringify(character),
-        }),
-      });
+      if (isPrecreated && existingTeam) {
+        // Update existing pre-created team
+        const res = await fetch("/api/team/join", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            access_code: existingTeam.access_code,
+            name: teamName.trim(),
+            character: JSON.stringify(character),
+          }),
+        });
 
-      const json: ApiResponse = await res.json();
-      if (!res.ok || json.error || !json.data) {
-        setError(json.error ?? "Failed to create fellowship");
-        setLoading(false);
-        return;
+        const json: ApiResponse = await res.json();
+        if (!res.ok || json.error || !json.data) {
+          setError(json.error ?? "Failed to update team");
+          setLoading(false);
+          return;
+        }
+
+        const data = json.data as Record<string, unknown>;
+        setTeam(data.team as never);
+        setTeamCharacter(character);
+        setObjects(data.objects as never[]);
+        setSteps(data.steps as never[]);
+        setProgress(data.progress as never[]);
+
+        const stepsArr = data.steps as Array<Record<string, unknown>>;
+        if (stepsArr.length > 0) setCurrentStep(stepsArr[0] as never);
+      } else {
+        // Create new team (normal flow)
+        const res = await fetch("/api/team", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: sessionId,
+            name: teamName.trim(),
+            character: JSON.stringify(character),
+          }),
+        });
+
+        const json: ApiResponse = await res.json();
+        if (!res.ok || json.error || !json.data) {
+          setError(json.error ?? "Failed to create fellowship");
+          setLoading(false);
+          return;
+        }
+
+        const data = json.data as Record<string, unknown>;
+        setTeam(data.team as never);
+        setTeamCharacter(character);
+        setObjects(data.objects as never[]);
+        setSteps(data.steps as never[]);
+        setProgress(data.progress as never[]);
+
+        const stepsArr = data.steps as Array<Record<string, unknown>>;
+        if (stepsArr.length > 0) setCurrentStep(stepsArr[0] as never);
       }
-
-      const data = json.data as Record<string, unknown>;
-      setTeam(data.team as never);
-      setTeamCharacter(character);
-      setObjects(data.objects as never[]);
-      setSteps(data.steps as never[]);
-      setProgress(data.progress as never[]);
-
-      const stepsArr = data.steps as Array<Record<string, unknown>>;
-      if (stepsArr.length > 0) setCurrentStep(stepsArr[0] as never);
 
       setTeamCode(code);
       setConfirmed(true);
