@@ -64,6 +64,7 @@ export default function PlayPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"quest" | "journal" | "map">("quest");
   const [introDismissed, setIntroDismissed] = useState(false);
+  const [introAttempts, setIntroAttempts] = useState(0);
   const [elapsed, setElapsed] = useState("00:00");
   const startTime = usePlayerStore((s) => s.startTime);
 
@@ -222,6 +223,7 @@ export default function PlayPage() {
                         setAnswer("");
                         setFeedback(null);
                       } else {
+                        setIntroAttempts((a) => a + 1);
                         setFeedback({ type: "error", msg: "Not quite... try again!" });
                         setShaking(true);
                         setTimeout(() => setShaking(false), 400);
@@ -238,6 +240,7 @@ export default function PlayPage() {
                       setAnswer("");
                       setFeedback(null);
                     } else {
+                      setIntroAttempts((a) => a + 1);
                       setFeedback({ type: "error", msg: "Not quite... try again!" });
                       setShaking(true);
                       setTimeout(() => setShaking(false), 400);
@@ -251,6 +254,14 @@ export default function PlayPage() {
               </div>
               {feedback && (
                 <p className={`mt-2 text-sm ${feedback.type === "error" ? "text-red-400" : "text-green-400"}`}>{feedback.msg}</p>
+              )}
+              {introAttempts >= 3 && (
+                <button
+                  onClick={() => setIntroDismissed(true)}
+                  className="mt-3 text-xs text-gray-500 hover:text-gray-300"
+                >
+                  Skip this riddle and start the quest
+                </button>
               )}
             </Card>
           )}

@@ -565,6 +565,26 @@ export default function ConfigureSessionPage() {
           </button>
         </div>
 
+        {/* Intro section */}
+        {session && (session.intro_text || session.intro_enigme) && (
+          <div className="mb-6 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+            <h3 className="mb-2 text-sm font-semibold text-indigo-700">Introduction (Step 0)</h3>
+            {session.intro_text && (
+              <p className="mb-2 text-sm italic text-gray-600">{session.intro_text}</p>
+            )}
+            {session.intro_enigme && (
+              <div className="mt-2 rounded-lg bg-white p-3">
+                <p className="text-xs font-medium text-gray-500">First Riddle</p>
+                <p className="text-sm text-gray-800">{session.intro_enigme}</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="text-xs text-gray-400">Answer:</span>
+                  <span className="rounded bg-green-50 px-2 py-0.5 font-mono text-sm font-bold text-green-700">{session.intro_answer ?? "—"}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Objects list */}
         <div className="space-y-3">
           {objects.length === 0 && (
