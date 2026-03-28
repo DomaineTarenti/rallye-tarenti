@@ -175,7 +175,7 @@ export default function CelebratePage() {
               Chapter {chapterNumber} of {totalChapters}
             </p>
             <div className="animate-score-pop rounded-xl bg-white/20 px-8 py-4 backdrop-blur">
-              <span className="text-4xl font-black text-white">+{currentStepScore} RP</span>
+              <span className="text-2xl font-black text-white">Chapter {chapterNumber} complete</span>
             </div>
           </>
         ) : (

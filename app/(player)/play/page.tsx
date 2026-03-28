@@ -310,8 +310,7 @@ export default function PlayPage() {
           p.step_id === step.id ? { ...p, status: "completed" as const, completed_at: new Date().toISOString() } : p
         );
         setProgress(updated);
-        setCurrentStepScore(30);
-        setScore(score + 30);
+        // Score calculated at the end — no per-step RP
         router.push("/celebrate");
       } else {
         setFeedback({ type: "error", msg: result?.message ?? "Not quite... try again!" });
@@ -386,8 +385,7 @@ export default function PlayPage() {
           p.step_id === step.id ? { ...p, status: "completed" as const, completed_at: new Date().toISOString() } : p
         );
         setProgress(updated);
-        setCurrentStepScore(30);
-        setScore(score + 30);
+        // Score calculated at the end — no per-step RP
         router.push("/celebrate");
       } else {
         setFeedback({ type: "error", msg: result?.message ?? "Invalid code" });
