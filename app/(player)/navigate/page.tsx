@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Navigation, QrCode, MapPin, AlertTriangle, Image } from "lucide-react";
 import { Button, Card } from "@/components/shared";
 import { usePlayerStore } from "@/lib/store";
 import { getDistance, getBearing, formatDistance, getDistanceColor } from "@/lib/geo";
+import type { ApiResponse, Step, TeamProgress } from "@/lib/types";
 
 export default function NavigatePage() {
   const router = useRouter();
@@ -14,7 +15,43 @@ export default function NavigatePage() {
   const steps = usePlayerStore((s) => s.steps);
   const currentStepIndex = usePlayerStore((s) => s.currentStepIndex);
   const team = usePlayerStore((s) => s.team);
+  const session = usePlayerStore((s) => s.session);
   const teamCharacter = usePlayerStore((s) => s.teamCharacter);
+  const setObjects = usePlayerStore((s) => s.setObjects);
+  const setSteps = usePlayerStore((s) => s.setSteps);
+  const setProgress = usePlayerStore((s) => s.setProgress);
+  const setCurrentStepIndex = usePlayerStore((s) => s.setCurrentStepIndex);
+  const setCollectedLetters = usePlayerStore((s) => s.setCollectedLetters);
+  const progress = usePlayerStore((s) => s.progress);
+
+  // Load game state if store is empty
+  const loadGameState = useCallback(async () => {
+    if (!team || !session) return;
+    try {
+      const res = await fetch(`/api/game?team_id=${team.id}&session_id=${session.id}`);
+      const json: ApiResponse = await res.json();
+      if (json.data) {
+        const d = json.data as Record<string, unknown>;
+        setObjects(d.objects as never[]);
+        setSteps(d.steps as never[]);
+        setProgress(d.progress as never[]);
+        const prog = d.progress as TeamProgress[];
+        const stepsList = d.steps as Step[];
+        const active = prog.find((p) => p.status === "active");
+        if (active) {
+          const idx = stepsList.findIndex((s) => s.id === active.step_id);
+          if (idx >= 0) setCurrentStepIndex(idx);
+        }
+        if (d.team && (d.team as Record<string, unknown>).collected_letters) {
+          setCollectedLetters((d.team as Record<string, unknown>).collected_letters as Record<string, string>);
+        }
+      }
+    } catch { /* silent */ }
+  }, [team, session, setObjects, setSteps, setProgress, setCurrentStepIndex, setCollectedLetters]);
+
+  useEffect(() => {
+    if (team && session && (steps.length === 0 || progress.length === 0)) loadGameState();
+  }, [team, session, steps.length, progress.length, loadGameState]);
 
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
@@ -22,8 +59,6 @@ export default function NavigatePage() {
   const [gpsError, setGpsError] = useState(false);
   const [showPhoto, setShowPhoto] = useState(false);
   const watchRef = useRef<number | null>(null);
-
-  const progress = usePlayerStore((s) => s.progress);
 
   // Derive chapter from completed count
   const completedCount = progress.filter((p) => p.status === "completed").length;
@@ -102,6 +137,14 @@ export default function NavigatePage() {
   }, [distance != null && distance < 20]);
 
   if (!team) { router.push("/"); return null; }
+
+  if (!resolvedObject && steps.length === 0) {
+    return (
+      <main className="flex min-h-[100dvh] items-center justify-center bg-deep">
+        <p className="text-sm text-gray-500">Loading...</p>
+      </main>
+    );
+  }
 
   const canScan = !hasGPS || (distance != null && distance < 10);
 

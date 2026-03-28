@@ -81,6 +81,11 @@ function JoinContent() {
 
     if (!code) { setError("No Access Key provided."); setLoading(false); return; }
 
+    // If entering a different session code, clear stale store data
+    if (storedSession && storedSession.code !== code.toUpperCase()) {
+      usePlayerStore.getState().reset();
+    }
+
     // If team already exists for this session, resume directly
     if (storedSession && storedTeam && storedSession.code === code.toUpperCase()) {
       router.push("/navigate");
