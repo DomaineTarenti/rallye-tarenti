@@ -315,7 +315,18 @@ async function processMatch(
       return json(result);
     }
 
-    const result: ScanResult = { valid: false, reason: "wrong_order", message: "This artifact is not yet your destiny... your path leads elsewhere for now." };
+    // Tell the user which object they should be looking for
+    let expectedName = "the next artifact";
+    if (expectedObjectId) {
+      const { data: expectedObj } = await supabase
+        .from("objects")
+        .select("name, narrative_name")
+        .eq("id", expectedObjectId)
+        .single();
+      if (expectedObj) expectedName = expectedObj.narrative_name || expectedObj.name;
+    }
+
+    const result: ScanResult = { valid: false, reason: "wrong_order", message: `This is not your current artifact. You are looking for: ${expectedName}` };
     setCachedScan(scannedCode, team_id, result);
     return json(result);
   }
