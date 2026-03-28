@@ -43,6 +43,7 @@ export default function CharacterPage() {
   const setObjects = usePlayerStore((s) => s.setObjects);
   const setProgress = usePlayerStore((s) => s.setProgress);
   const setCurrentStep = usePlayerStore((s) => s.setCurrentStep);
+  const setStartTime = usePlayerStore((s) => s.setStartTime);
 
   // If team already exists (pre-created), pre-fill the name
   const isPrecreated = !!existingTeam?.is_precreated;
@@ -155,6 +156,7 @@ export default function CharacterPage() {
       }
 
       setTeamCode(code);
+      setStartTime(Date.now());
       setConfirmed(true);
       setLoading(false);
     } catch {

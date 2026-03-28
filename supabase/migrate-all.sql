@@ -22,6 +22,7 @@ ALTER TABLE sessions ADD COLUMN IF NOT EXISTS secret_word text DEFAULT 'LABYRINT
 ALTER TABLE teams ADD COLUMN IF NOT EXISTS collected_letters jsonb DEFAULT '{}';
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS team_count integer DEFAULT 0;
 ALTER TABLE teams ADD COLUMN IF NOT EXISTS access_code text;
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS started_at timestamptz;
 ALTER TABLE teams ADD COLUMN IF NOT EXISTS is_precreated boolean DEFAULT false;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_access_code ON teams(access_code) WHERE access_code IS NOT NULL;
 

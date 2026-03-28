@@ -25,6 +25,7 @@ interface PlayerState {
   currentStepScore: number;
   stepStartTime: number;
   collectedLetters: Record<string, string>;
+  startTime: number | null;
 
   setHasHydrated: (v: boolean) => void;
   setSession: (session: Session | null) => void;
@@ -40,6 +41,7 @@ interface PlayerState {
   setStepStartTime: (t: number) => void;
   setCollectedLetters: (l: Record<string, string>) => void;
   addCollectedLetter: (physicalId: string, letter: string) => void;
+  setStartTime: (t: number | null) => void;
   advanceStep: () => void;
   reset: () => void;
 }
@@ -60,6 +62,7 @@ export const usePlayerStore = create<PlayerState>()(
       currentStepScore: 0,
       stepStartTime: 0,
       collectedLetters: {},
+      startTime: null,
 
       setHasHydrated: (v) => set({ _hasHydrated: v }),
       setSession: (session) => set({ session }),
@@ -84,6 +87,7 @@ export const usePlayerStore = create<PlayerState>()(
       addCollectedLetter: (physicalId, letter) => set((state) => ({
         collectedLetters: { ...state.collectedLetters, [physicalId]: letter },
       })),
+      setStartTime: (t) => set({ startTime: t }),
 
       advanceStep: () => {
         const { currentStepIndex, steps } = get();
@@ -112,6 +116,7 @@ export const usePlayerStore = create<PlayerState>()(
           currentStepScore: 0,
           stepStartTime: 0,
           collectedLetters: {},
+          startTime: null,
         }),
     }),
     {

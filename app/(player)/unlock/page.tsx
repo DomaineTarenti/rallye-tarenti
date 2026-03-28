@@ -2,11 +2,23 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, Trophy, Hexagon, RotateCcw } from "lucide-react";
+import { Lock, Trophy, Hexagon, RotateCcw, Clock, Lightbulb } from "lucide-react";
 import { Button } from "@/components/shared";
 import { usePlayerStore } from "@/lib/store";
-import { getRank } from "@/lib/scoring";
+import { getRank, formatDuration } from "@/lib/scoring";
 import type { ApiResponse } from "@/lib/types";
+
+interface UnlockResult {
+  success: boolean;
+  message?: string;
+  final_score?: number;
+  rank?: string;
+  rank_label?: string;
+  completion_time?: number;
+  time_penalty?: number;
+  hint_penalty?: number;
+  hints_count?: number;
+}
 
 export default function UnlockPage() {
   const router = useRouter();
@@ -26,6 +38,7 @@ export default function UnlockPage() {
   const [shaking, setShaking] = useState(false);
   const [attemptsLeft, setAttemptsLeft] = useState(5);
   const [solved, setSolved] = useState(false);
+  const [finalResult, setFinalResult] = useState<UnlockResult | null>(null);
 
   // Available letters from collected objects
   const availableLetters = useMemo(() => {
@@ -86,14 +99,14 @@ export default function UnlockPage() {
         body: JSON.stringify({ team_id: team!.id, word_attempt: currentWord }),
       });
       const json: ApiResponse = await res.json();
-      const data = json.data as { success: boolean; message: string } | null;
+      const data = json.data as UnlockResult | null;
 
       if (data?.success) {
+        setFinalResult(data);
         setSolved(true);
       } else {
         setAttemptsLeft((a) => a - 1);
-        setScore(Math.max(0, score - 20));
-        setFeedback(`${data?.message ?? "Incorrect."} (-20 RP, ${attemptsLeft - 1} attempts left)`);
+        setFeedback(`${data?.message ?? "Incorrect."} (${attemptsLeft - 1} attempts left)`);
         setShaking(true);
         setTimeout(() => setShaking(false), 400);
       }
@@ -107,11 +120,11 @@ export default function UnlockPage() {
   if (!team) { router.push("/"); return null; }
 
   // Victory screen
-  if (solved) {
-    const rank = getRank(score);
+  if (solved && finalResult) {
+    const rank = getRank(finalResult.final_score ?? 0);
     return (
       <main
-        className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden"
+        className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden overflow-y-auto"
         style={{ backgroundColor: teamColor }}
       >
         {/* Falling stars */}
@@ -134,7 +147,7 @@ export default function UnlockPage() {
           </svg>
         ))}
 
-        <div className="relative z-10 flex flex-col items-center px-6 text-center">
+        <div className="relative z-10 flex flex-col items-center px-6 py-12 text-center">
           <div className="animate-scale-in mb-4">
             <Trophy className="h-20 w-20 text-white" />
           </div>
@@ -145,7 +158,7 @@ export default function UnlockPage() {
             {team.name} — you have unlocked the treasure
           </p>
 
-          {/* Show the word */}
+          {/* The word */}
           <div className="animate-score-pop mb-4 flex gap-1.5">
             {currentWord.split("").map((l, i) => (
               <div key={i} className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/30 text-xl font-black text-white backdrop-blur">
@@ -154,20 +167,45 @@ export default function UnlockPage() {
             ))}
           </div>
 
-          {rank.key && (
-            <div className="animate-score-pop mb-4 rounded-2xl bg-white/20 px-8 py-4 backdrop-blur">
-              <p className="text-xs uppercase tracking-wider text-white/70">Final Rank</p>
-              <p className="text-4xl font-black text-white">{rank.label}</p>
+          {/* Rank */}
+          <div className="animate-score-pop mb-4 rounded-2xl bg-white/20 px-8 py-4 backdrop-blur">
+            <p className="text-xs uppercase tracking-wider text-white/70">Final Rank</p>
+            <p className="text-3xl font-black text-white">{rank.label}</p>
+          </div>
+
+          {/* Score */}
+          <div className="animate-score-pop mb-4 text-5xl font-black text-white">
+            {finalResult.final_score}
+          </div>
+          <p className="mb-6 text-xs text-white/50">points</p>
+
+          {/* Score breakdown */}
+          <div className="mb-6 w-full max-w-xs space-y-2 rounded-xl bg-white/10 p-4 text-left text-sm backdrop-blur">
+            <div className="flex justify-between text-white/80">
+              <span>Base score</span>
+              <span className="font-bold">1000</span>
             </div>
-          )}
-          <div className="animate-score-pop flex items-center gap-2">
-            <Hexagon className="h-6 w-6 text-white" />
-            <span className="text-3xl font-black text-white">{score} RP</span>
+            {(finalResult.time_penalty ?? 0) > 0 && (
+              <div className="flex items-center justify-between text-white/60">
+                <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Time ({finalResult.completion_time ? formatDuration(finalResult.completion_time) : ""})</span>
+                <span className="text-red-300">-{finalResult.time_penalty}</span>
+              </div>
+            )}
+            {(finalResult.hint_penalty ?? 0) > 0 && (
+              <div className="flex items-center justify-between text-white/60">
+                <span className="flex items-center gap-1"><Lightbulb className="h-3 w-3" /> Hints ({finalResult.hints_count})</span>
+                <span className="text-red-300">-{finalResult.hint_penalty}</span>
+              </div>
+            )}
+            <div className="border-t border-white/20 pt-2 flex justify-between font-bold text-white">
+              <span>Final score</span>
+              <span>{finalResult.final_score}</span>
+            </div>
           </div>
 
           <button
             onClick={() => router.push("/map")}
-            className="mt-8 rounded-xl bg-white px-6 py-3 font-bold shadow-lg transition active:scale-95"
+            className="rounded-xl bg-white px-6 py-3 font-bold shadow-lg transition active:scale-95"
             style={{ color: teamColor }}
           >
             View your journey

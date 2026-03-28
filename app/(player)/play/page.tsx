@@ -8,6 +8,7 @@ import {
 import { Button, Card, Loader } from "@/components/shared";
 import { usePlayerStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
+import { formatElapsed } from "@/lib/scoring";
 import type { ApiResponse, Step, TeamProgress } from "@/lib/types";
 
 function getEnigmaInputType(step: Step): "text" | "code" | "qcm" | "photo" | "staff" {
@@ -63,6 +64,18 @@ export default function PlayPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"play" | "journal">("play");
   const [introDismissed, setIntroDismissed] = useState(false);
+  const [elapsed, setElapsed] = useState("00:00");
+  const startTime = usePlayerStore((s) => s.startTime);
+
+  // Timer
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const st = usePlayerStore.getState().startTime;
+      if (!st) return;
+      setElapsed(formatElapsed(Date.now() - st));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Realtime admin messages
   useEffect(() => {
@@ -410,10 +423,7 @@ export default function PlayPage() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ backgroundColor: teamColor }}>{initials}</div>
             <span className="text-sm font-semibold">Chapter {chapterNumber} of {totalChapters}</span>
           </div>
-          <div className="flex items-center gap-1.5 text-amber">
-            <Hexagon className="h-4 w-4" />
-            <span className="text-sm font-bold">{score} RP</span>
-          </div>
+          <span className="font-mono text-sm font-bold text-amber">{elapsed}</span>
         </div>
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/5">
           <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${(completedCount / totalChapters) * 100}%` }} />
