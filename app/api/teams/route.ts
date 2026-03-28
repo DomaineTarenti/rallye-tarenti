@@ -62,11 +62,12 @@ export async function GET(req: NextRequest) {
       total_steps: totalSteps,
       current_step: active ? progress.indexOf(active) + 1 : completed,
       hints_used: hintsUsed,
-      elapsed_seconds: team.created_at
+      elapsed_seconds: team.started_at
         ? Math.floor(
-            (Date.now() - new Date(team.created_at).getTime()) / 1000
+            (Date.now() - new Date(team.started_at).getTime()) / 1000
           )
         : 0,
+      started_at: team.started_at ?? null,
     };
   });
 

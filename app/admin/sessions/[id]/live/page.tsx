@@ -21,6 +21,7 @@ interface EnrichedTeam {
   status: string;
   final_score: number | null;
   created_at: string;
+  started_at: string | null;
   completed_steps: number;
   total_steps: number;
   current_step: number;
@@ -172,7 +173,14 @@ export default function LiveDashboard() {
 
   const playing = teams.filter((t) => t.status === "playing");
   const finished = teams.filter((t) => t.status === "finished");
-  const sorted = [...teams].sort((a, b) => b.completed_steps !== a.completed_steps ? b.completed_steps - a.completed_steps : a.elapsed_seconds - b.elapsed_seconds);
+  const statusOrder = (s: string) => s === "finished" ? 0 : s === "playing" ? 1 : 2;
+  const sorted = [...teams].sort((a, b) => {
+    const sa = statusOrder(a.status), sb = statusOrder(b.status);
+    if (sa !== sb) return sa - sb;
+    if (a.status === "finished") return (b.final_score ?? 0) - (a.final_score ?? 0);
+    if (a.status === "playing") return b.completed_steps - a.completed_steps;
+    return 0;
+  });
   const visible = sorted.slice(0, visibleCount);
 
   return (
@@ -249,9 +257,11 @@ export default function LiveDashboard() {
                 <tbody>
                   {visible.map((team, i) => {
                     const ch = parseChar(team.character);
-                    const sc = team.final_score ?? Math.max(0, 1000 - team.hints_used * 15);
-                    const rk = getRank(sc);
-                    const el = team.elapsed_seconds + tick * 10;
+                    const hasStarted = !!team.started_at;
+                    const isFinished = team.status === "finished";
+                    const sc = isFinished ? (team.final_score ?? 0) : null;
+                    const rk = sc !== null ? getRank(sc) : null;
+                    const el = hasStarted ? team.elapsed_seconds + tick * 10 : 0;
                     const stuck = team.status === "playing" && team.hints_used > 2;
 
                     return (
@@ -272,11 +282,11 @@ export default function LiveDashboard() {
                             <div className="h-full rounded-full bg-indigo-500" style={{ width: `${team.total_steps ? (team.completed_steps / team.total_steps) * 100 : 0}%` }} />
                           </div>
                         </td>
-                        <td className="px-4 py-3 font-bold text-amber-600">{sc}</td>
+                        <td className="px-4 py-3 font-bold text-amber-600">{sc !== null ? sc : <span className="text-gray-300">—</span>}</td>
                         <td className="px-4 py-3">
-                          {rk.key && <span className={`rounded px-2 py-0.5 text-[10px] font-semibold ${rk.key === "diamond" ? "bg-cyan-50 text-cyan-700" : rk.key === "platinum" ? "bg-purple-50 text-purple-700" : rk.key === "gold" ? "bg-amber-50 text-amber-700" : rk.key === "silver" ? "bg-gray-100 text-gray-600" : "bg-orange-50 text-orange-700"}`}>{rk.label}</span>}
+                          {rk?.key && <span className={`rounded px-2 py-0.5 text-[10px] font-semibold ${rk.key === "diamond" ? "bg-cyan-50 text-cyan-700" : rk.key === "platinum" ? "bg-purple-50 text-purple-700" : rk.key === "gold" ? "bg-amber-50 text-amber-700" : rk.key === "silver" ? "bg-gray-100 text-gray-600" : "bg-orange-50 text-orange-700"}`}>{rk.label}</span>}
                         </td>
-                        <td className="px-4 py-3"><div className="flex items-center gap-1 text-gray-500"><Clock className="h-3 w-3" /><span className="font-mono text-xs">{formatElapsed(el)}</span></div></td>
+                        <td className="px-4 py-3"><div className="flex items-center gap-1 text-gray-500"><Clock className="h-3 w-3" /><span className="font-mono text-xs">{hasStarted ? formatElapsed(el) : "—"}</span></div></td>
                         <td className="px-4 py-3">
                           <span className={`rounded px-2 py-0.5 text-[10px] font-semibold ${team.status === "playing" ? (stuck ? "bg-amber-100 text-amber-700" : "bg-green-50 text-green-700") : team.status === "finished" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-500"}`}>{stuck ? "Stuck" : team.status}</span>
                         </td>

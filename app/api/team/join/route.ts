@@ -72,7 +72,10 @@ export async function POST(req: NextRequest) {
   const updates: Record<string, unknown> = {};
   if (name) updates.name = name;
   if (character) updates.character = typeof character === "string" ? character : JSON.stringify(character);
-  if (team.status === "waiting") updates.status = "playing";
+  if (team.status === "waiting") {
+    updates.status = "playing";
+    updates.started_at = new Date().toISOString();
+  }
 
   if (Object.keys(updates).length > 0) {
     await supabase.from("teams").update(updates).eq("id", team.id);

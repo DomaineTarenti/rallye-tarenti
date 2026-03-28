@@ -169,6 +169,7 @@ export async function POST(req: NextRequest) {
       character: typeof character === "string" ? character : JSON.stringify(character),
       status: "playing",
       object_order: objectOrder,
+      started_at: new Date().toISOString(),
     })
     .select()
     .single();
