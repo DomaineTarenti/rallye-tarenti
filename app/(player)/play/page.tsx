@@ -191,9 +191,9 @@ export default function PlayPage() {
     );
   }
 
-  // Show intro screen on first step before any scanning
+  // Show intro screen ONLY if: has intro, no steps completed, no step scanned yet
   const completedAny = progress.some((p) => p.status === "completed");
-  const showIntro = session.intro_text && currentStepIndex === 0 && !completedAny && !introDismissed;
+  const showIntro = session.intro_text && !currentStep && !completedAny && !introDismissed;
   if (showIntro) {
     const teamColor = teamCharacter?.color ?? "#7F77DD";
     return (
