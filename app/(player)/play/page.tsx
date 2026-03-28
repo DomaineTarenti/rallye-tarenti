@@ -149,8 +149,8 @@ export default function PlayPage() {
   }, [team, session, setObjects, setSteps, setProgress, setScore, setCurrentStep, setCurrentStepIndex]);
 
   useEffect(() => {
-    if (team && session && steps.length === 0) loadGameState();
-  }, [team, session, steps.length, loadGameState]);
+    if (team && session && (steps.length === 0 || progress.length === 0)) loadGameState();
+  }, [team, session, steps.length, progress.length, loadGameState]);
 
   useEffect(() => {
     if (currentStep) { setStepStartTime(Date.now()); setHints([]); setUsedHintLevels([]); setAnswer(""); }
@@ -480,6 +480,9 @@ export default function PlayPage() {
         </div>
       ) : activeTab === "map" ? (
         <div className="flex-1 overflow-y-auto px-6 py-6">
+          {steps.length === 0 ? (
+            <p className="text-center text-sm text-gray-500">Loading map...</p>
+          ) : (
           <div className="mx-auto flex max-w-xs flex-col items-center">
             {steps.map((s, idx) => {
               const stepProgress = progress.find((p) => p.step_id === s.id);
@@ -531,6 +534,7 @@ export default function PlayPage() {
               );
             })}
           </div>
+          )}
         </div>
       ) : (
       <>
