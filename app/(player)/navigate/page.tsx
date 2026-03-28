@@ -103,7 +103,7 @@ export default function NavigatePage() {
 
   if (!team) { router.push("/"); return null; }
 
-  const canScan = distance != null && distance < 10;
+  const canScan = !hasGPS || (distance != null && distance < 10);
 
   return (
     <main className="flex min-h-[100dvh] flex-col bg-deep text-white">
@@ -157,21 +157,14 @@ export default function NavigatePage() {
           </>
         ) : (
           <>
-            {/* No GPS — show hint-based navigation */}
-            <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-surface">
-              {gpsError ? (
-                <AlertTriangle className="h-10 w-10 text-amber" />
-              ) : (
-                <Navigation className="h-10 w-10 animate-pulse text-primary" />
-              )}
+            {/* Exploration mode — no GPS coordinates, use clues */}
+            <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-primary/15">
+              <Navigation className="h-10 w-10 text-primary" />
             </div>
 
-            {gpsError && (
-              <p className="mb-2 text-sm text-amber">GPS unavailable</p>
-            )}
-
             <h2 className="mb-2 text-xl font-bold text-center">{objectName}</h2>
-            <p className="mb-6 text-center text-sm text-gray-400">{objectDesc}</p>
+            {objectDesc && <p className="mb-4 text-center text-sm text-gray-400">{objectDesc}</p>}
+            <p className="mb-6 text-center text-xs text-gray-500">Use the clues below to find the artifact</p>
           </>
         )}
 
@@ -182,8 +175,8 @@ export default function NavigatePage() {
             <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Clue</span>
           </div>
           <p className="text-sm italic text-gray-300">
-            {currentStep?.text_narratif?.slice(0, 150) ?? "Search for the artifact nearby..."}
-            {(currentStep?.text_narratif?.length ?? 0) > 150 ? "..." : ""}
+            {(activeStep?.text_narratif ?? currentStep?.text_narratif ?? "Search for the artifact nearby...").slice(0, 200)}
+            {((activeStep?.text_narratif ?? currentStep?.text_narratif)?.length ?? 0) > 200 ? "..." : ""}
           </p>
         </Card>
 
