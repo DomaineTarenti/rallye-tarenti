@@ -45,8 +45,8 @@ export default function CharacterPage() {
   const setCurrentStep = usePlayerStore((s) => s.setCurrentStep);
   const setStartTime = usePlayerStore((s) => s.setStartTime);
 
-  // If team already exists (pre-created), pre-fill the name
-  const isPrecreated = !!existingTeam?.is_precreated;
+  // If team already exists with an access_code (pre-created), use update flow
+  const isPrecreated = !!existingTeam?.is_precreated && !!existingTeam?.access_code;
 
   const [teamName, setTeamName] = useState(existingTeam?.name ?? "");
   const [selectedAnimal, setSelectedAnimal] = useState<(typeof ANIMALS)[number] | null>(null);
