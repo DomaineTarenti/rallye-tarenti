@@ -275,27 +275,44 @@ async function processMatch(
     return json({ valid: false, reason: "unknown", message: "Internal error. Contact an organiser." });
   }
 
-  console.log("[SCAN] Active step object_id:", activeStep.object_id, "Scanned object id:", scannedObject.id);
+  // Get team's object_order to determine the expected object
+  const { data: teamData } = await supabase
+    .from("teams")
+    .select("object_order")
+    .eq("id", team_id)
+    .single();
 
-  // Check match
-  if (activeStep.object_id !== scannedObject.id) {
-    // Check if already scanned
+  const objectOrder: string[] = teamData?.object_order ?? [];
+  const expectedObjectId = objectOrder.length > 0
+    ? objectOrder[completedCount] ?? null
+    : activeStep.object_id;
+
+  console.log("[SCAN] Expected object:", expectedObjectId, "Scanned object:", scannedObject.id, "Active step object:", activeStep.object_id);
+
+  // Check if this is the expected object (by team order) OR matches the active step
+  const isExpected = scannedObject.id === expectedObjectId || scannedObject.id === activeStep.object_id;
+
+  if (!isExpected) {
+    // Check if already completed
+    const isCompleted = allProgress.some(
+      (p) => p.status === "completed" && activeStep.object_id !== scannedObject.id
+    );
+
+    // Find if this object's step was already completed
     const { data: objectSteps } = await supabase
       .from("steps")
       .select("id")
       .eq("object_id", scannedObject.id as string);
 
     const stepIds = (objectSteps ?? []).map((s: { id: string }) => s.id);
+    const allCompleted = stepIds.length > 0 && stepIds.every(
+      (sid) => allProgress.some((p) => p.step_id === sid && p.status === "completed")
+    );
 
-    if (stepIds.length > 0) {
-      const matchedProgress = allProgress.filter(
-        (p) => stepIds.includes(p.step_id as string) && p.status === "completed"
-      );
-      if (matchedProgress.length === stepIds.length) {
-        const result: ScanResult = { valid: false, reason: "already_scanned", message: "You have already claimed this artifact." };
-        setCachedScan(scannedCode, team_id, result);
-        return json(result);
-      }
+    if (allCompleted) {
+      const result: ScanResult = { valid: false, reason: "already_scanned", message: "You have already claimed this artifact." };
+      setCachedScan(scannedCode, team_id, result);
+      return json(result);
     }
 
     const result: ScanResult = { valid: false, reason: "wrong_order", message: "This artifact is not yet your destiny... your path leads elsewhere for now." };
@@ -303,9 +320,28 @@ async function processMatch(
     return json(result);
   }
 
-  // Valid scan
+  // Valid scan — find the correct step for this object
+  const matchingStep = activeStep.object_id === scannedObject.id
+    ? activeStep
+    : null;
+
+  // If the active step doesn't match but the object is expected, find the step for this object
+  let validStep = matchingStep;
+  if (!validStep) {
+    const { data: objStep } = await supabase
+      .from("steps")
+      .select("*")
+      .eq("object_id", scannedObject.id)
+      .single();
+    validStep = objStep;
+  }
+
+  if (!validStep) {
+    return json({ valid: false, reason: "unknown", message: "No step found for this object." });
+  }
+
   console.log("[SCAN] VALID match for", scannedObject.name);
-  const result: ScanResult = { valid: true, step: activeStep, object: scannedObject };
+  const result: ScanResult = { valid: true, step: validStep, object: scannedObject };
   setCachedScan(scannedCode, team_id, result);
   return json(result);
 }
