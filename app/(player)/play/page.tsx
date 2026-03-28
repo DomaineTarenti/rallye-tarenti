@@ -219,7 +219,7 @@ export default function PlayPage() {
                     if (e.key === "Enter" && answer.trim()) {
                       const normalize = (s: string) => s.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                       if (session.intro_answer && normalize(answer) === normalize(session.intro_answer)) {
-                        setIntroDismissed(true);
+                        usePlayerStore.getState().setCurrentStep(null); router.push("/navigate");
                         setAnswer("");
                         setFeedback(null);
                       } else {
@@ -236,7 +236,7 @@ export default function PlayPage() {
                     if (!answer.trim()) return;
                     const normalize = (s: string) => s.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                     if (session.intro_answer && normalize(answer) === normalize(session.intro_answer)) {
-                      setIntroDismissed(true);
+                      usePlayerStore.getState().setCurrentStep(null); router.push("/navigate");
                       setAnswer("");
                       setFeedback(null);
                     } else {
