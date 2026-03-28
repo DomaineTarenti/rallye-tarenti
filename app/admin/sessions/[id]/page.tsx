@@ -749,13 +749,11 @@ export default function ConfigureSessionPage() {
                               navigator.geolocation.getCurrentPosition(async (pos) => {
                                 const lat = pos.coords.latitude;
                                 const lng = pos.coords.longitude;
-                                const res = await fetch("/api/objects", {
+                                await fetch("/api/objects", {
                                   method: "PATCH",
                                   headers: { "Content-Type": "application/json" },
                                   body: JSON.stringify({ id: obj.id, latitude: lat, longitude: lng }),
                                 });
-                                const json = await res.json();
-                                if (json.error) { alert(json.error); return; }
                                 setObjects((prev) => prev.map((o) =>
                                   o.id === obj.id ? { ...o, latitude: lat, longitude: lng } : o
                                 ));
@@ -766,48 +764,26 @@ export default function ConfigureSessionPage() {
                             Use my position
                           </button>
                           <span className="text-xs text-gray-300">or</span>
-                          <div className="flex gap-1">
-                            <input
-                              type="text"
-                              placeholder="Lat"
-                              defaultValue={obj.latitude ? String(obj.latitude) : ""}
-                              className="w-24 rounded border border-gray-200 px-2 py-1 font-mono text-xs text-gray-700 focus:border-indigo-400 focus:outline-none"
-                              onBlur={async (e) => {
-                                if (!obj.id) return;
-                                const lat = parseFloat(e.target.value);
-                                if (isNaN(lat)) return;
-                                const lng = obj.longitude ?? 0;
-                                await fetch("/api/objects", {
-                                  method: "PATCH",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ id: obj.id, latitude: lat, longitude: lng }),
-                                });
-                                setObjects((prev) => prev.map((o) =>
-                                  o.id === obj.id ? { ...o, latitude: lat } : o
-                                ));
-                              }}
-                            />
-                            <input
-                              type="text"
-                              placeholder="Lng"
-                              defaultValue={obj.longitude ? String(obj.longitude) : ""}
-                              className="w-24 rounded border border-gray-200 px-2 py-1 font-mono text-xs text-gray-700 focus:border-indigo-400 focus:outline-none"
-                              onBlur={async (e) => {
-                                if (!obj.id) return;
-                                const lng = parseFloat(e.target.value);
-                                if (isNaN(lng)) return;
-                                const lat = obj.latitude ?? 0;
-                                await fetch("/api/objects", {
-                                  method: "PATCH",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ id: obj.id, latitude: lat, longitude: lng }),
-                                });
-                                setObjects((prev) => prev.map((o) =>
-                                  o.id === obj.id ? { ...o, longitude: lng } : o
-                                ));
-                              }}
-                            />
-                          </div>
+                          <input
+                            type="text"
+                            placeholder="36.6865, 10.2092"
+                            defaultValue={obj.latitude ? `${obj.latitude}, ${obj.longitude}` : ""}
+                            className="w-56 rounded border border-gray-200 px-2 py-1 font-mono text-xs text-gray-700 focus:border-indigo-400 focus:outline-none"
+                            onBlur={async (e) => {
+                              if (!obj.id) return;
+                              const parts = e.target.value.split(",").map((s) => parseFloat(s.trim()));
+                              if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) return;
+                              const [lat, lng] = parts;
+                              await fetch("/api/objects", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ id: obj.id, latitude: lat, longitude: lng }),
+                              });
+                              setObjects((prev) => prev.map((o) =>
+                                o.id === obj.id ? { ...o, latitude: lat, longitude: lng } : o
+                              ));
+                            }}
+                          />
                         </div>
                       </div>
 
