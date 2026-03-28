@@ -24,34 +24,35 @@ export default function NavigatePage() {
   const setCollectedLetters = usePlayerStore((s) => s.setCollectedLetters);
   const progress = usePlayerStore((s) => s.progress);
 
-  // Load game state if store is empty
-  const loadGameState = useCallback(async () => {
-    if (!team || !session) return;
-    try {
-      const res = await fetch(`/api/game?team_id=${team.id}&session_id=${session.id}`);
-      const json: ApiResponse = await res.json();
-      if (json.data) {
-        const d = json.data as Record<string, unknown>;
-        setObjects(d.objects as never[]);
-        setSteps(d.steps as never[]);
-        setProgress(d.progress as never[]);
-        const prog = d.progress as TeamProgress[];
-        const stepsList = d.steps as Step[];
-        const active = prog.find((p) => p.status === "active");
-        if (active) {
-          const idx = stepsList.findIndex((s) => s.id === active.step_id);
-          if (idx >= 0) setCurrentStepIndex(idx);
-        }
-        if (d.team && (d.team as Record<string, unknown>).collected_letters) {
-          setCollectedLetters((d.team as Record<string, unknown>).collected_letters as Record<string, string>);
-        }
-      }
-    } catch { /* silent */ }
-  }, [team, session, setObjects, setSteps, setProgress, setCurrentStepIndex, setCollectedLetters]);
+  const [dataReady, setDataReady] = useState(false);
 
   // Always reload game state when navigate mounts — ensures fresh active step
   useEffect(() => {
-    if (team && session) loadGameState();
+    if (!team || !session) return;
+    setDataReady(false);
+    (async () => {
+      try {
+        const res = await fetch(`/api/game?team_id=${team.id}&session_id=${session.id}`);
+        const json: ApiResponse = await res.json();
+        if (json.data) {
+          const d = json.data as Record<string, unknown>;
+          setObjects(d.objects as never[]);
+          setSteps(d.steps as never[]);
+          setProgress(d.progress as never[]);
+          const prog = d.progress as TeamProgress[];
+          const stepsList = d.steps as Step[];
+          const active = prog.find((p) => p.status === "active");
+          if (active) {
+            const idx = stepsList.findIndex((s) => s.id === active.step_id);
+            if (idx >= 0) setCurrentStepIndex(idx);
+          }
+          if (d.team && (d.team as Record<string, unknown>).collected_letters) {
+            setCollectedLetters((d.team as Record<string, unknown>).collected_letters as Record<string, string>);
+          }
+        }
+      } catch { /* silent */ }
+      setDataReady(true);
+    })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [team?.id, session?.id]);
 
@@ -153,10 +154,10 @@ export default function NavigatePage() {
 
   if (!team) { router.push("/"); return null; }
 
-  if (!resolvedObject && steps.length === 0) {
+  if (!dataReady || !resolvedObject) {
     return (
       <main className="flex min-h-[100dvh] items-center justify-center bg-deep">
-        <p className="text-sm text-gray-500">Loading...</p>
+        <p className="text-sm text-gray-500">Loading navigation...</p>
       </main>
     );
   }
