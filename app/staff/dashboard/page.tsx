@@ -48,13 +48,11 @@ export default function StaffDashboard() {
     if (mounted && !staffId) router.replace("/staff/login");
   }, [mounted, staffId, router]);
 
-  // Listen for teams via TWO channels:
-  // 1. team_progress becoming active on our assigned step
-  // 2. team_messages targeted at this guardian (staff_id)
+  // Listen for teams arriving at THIS guardian's step only
   useEffect(() => {
-    if (!staffId || !sessionId) return;
+    if (!staffId || !sessionId || !assignedStepId) return;
 
-    async function showTeam(teamId: string, stepId: string, progressId?: string) {
+    async function showTeam(teamId: string) {
       const { data: team } = await supabase
         .from("teams")
         .select("id, name, character")
@@ -66,11 +64,11 @@ export default function StaffDashboard() {
           navigator.vibrate([200, 100, 200]);
         }
         setWaitingTeam({
-          id: progressId ?? teamId,
+          id: teamId,
           teamId: team.id,
           teamName: team.name,
           character: parseChar(team.character),
-          stepId,
+          stepId: assignedStepId!,
           arrivedAt: Date.now(),
         });
         setResult(null);
@@ -79,28 +77,28 @@ export default function StaffDashboard() {
 
     const ch = supabase
       .channel(`staff-${staffId}`)
-      // Channel 1: team_progress on our assigned step
+      // Channel 1: team_progress on THIS guardian's assigned step ONLY
       .on("postgres_changes", {
         event: "UPDATE",
         schema: "public",
         table: "team_progress",
-        ...(assignedStepId ? { filter: `step_id=eq.${assignedStepId}` } : {}),
+        filter: `step_id=eq.${assignedStepId}`,
       }, (payload) => {
-        const row = payload.new as { team_id: string; step_id: string; status: string; id: string };
-        if (row.status !== "active") return;
-        if (assignedStepId && row.step_id !== assignedStepId) return;
-        showTeam(row.team_id, row.step_id, row.id);
+        const row = payload.new as { team_id: string; step_id: string; status: string };
+        if (row.status === "active" && row.step_id === assignedStepId) {
+          showTeam(row.team_id);
+        }
       })
-      // Channel 2: team_messages targeted at this guardian
+      // Channel 2: team_messages targeted at THIS guardian
       .on("postgres_changes", {
         event: "INSERT",
         schema: "public",
         table: "team_messages",
         filter: `staff_id=eq.${staffId}`,
       }, (payload) => {
-        const row = payload.new as { team_id: string; message: string; type: string };
-        if (row.type === "epreuve_request" && assignedStepId) {
-          showTeam(row.team_id, assignedStepId);
+        const row = payload.new as { team_id: string; type: string };
+        if (row.type === "epreuve_request") {
+          showTeam(row.team_id);
         }
       })
       .subscribe();

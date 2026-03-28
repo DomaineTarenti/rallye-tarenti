@@ -741,29 +741,74 @@ export default function ConfigureSessionPage() {
                             <span className="h-2 w-2 rounded-full bg-amber-400" /> Not placed yet
                           </span>
                         )}
-                        <button
-                          onClick={async () => {
-                            if (!obj.id) return;
-                            if (!navigator.geolocation) { alert("GPS not available"); return; }
-                            navigator.geolocation.getCurrentPosition(async (pos) => {
-                              const lat = pos.coords.latitude;
-                              const lng = pos.coords.longitude;
-                              const res = await fetch("/api/objects", {
-                                method: "PATCH",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ id: obj.id, latitude: lat, longitude: lng }),
-                              });
-                              const json = await res.json();
-                              if (json.error) { alert(json.error); return; }
-                              setObjects((prev) => prev.map((o) =>
-                                o.id === obj.id ? { ...o, latitude: lat, longitude: lng } : o
-                              ));
-                            }, () => alert("GPS permission denied"));
-                          }}
-                          className="mt-1 text-xs font-medium text-indigo-600 hover:text-indigo-700"
-                        >
-                          Use my current position
-                        </button>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <button
+                            onClick={async () => {
+                              if (!obj.id) return;
+                              if (!navigator.geolocation) { alert("GPS not available"); return; }
+                              navigator.geolocation.getCurrentPosition(async (pos) => {
+                                const lat = pos.coords.latitude;
+                                const lng = pos.coords.longitude;
+                                const res = await fetch("/api/objects", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ id: obj.id, latitude: lat, longitude: lng }),
+                                });
+                                const json = await res.json();
+                                if (json.error) { alert(json.error); return; }
+                                setObjects((prev) => prev.map((o) =>
+                                  o.id === obj.id ? { ...o, latitude: lat, longitude: lng } : o
+                                ));
+                              }, () => alert("GPS permission denied"));
+                            }}
+                            className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                          >
+                            Use my position
+                          </button>
+                          <span className="text-xs text-gray-300">or</span>
+                          <div className="flex gap-1">
+                            <input
+                              type="text"
+                              placeholder="Lat"
+                              defaultValue={obj.latitude ? String(obj.latitude) : ""}
+                              className="w-24 rounded border border-gray-200 px-2 py-1 font-mono text-xs text-gray-700 focus:border-indigo-400 focus:outline-none"
+                              onBlur={async (e) => {
+                                if (!obj.id) return;
+                                const lat = parseFloat(e.target.value);
+                                if (isNaN(lat)) return;
+                                const lng = obj.longitude ?? 0;
+                                await fetch("/api/objects", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ id: obj.id, latitude: lat, longitude: lng }),
+                                });
+                                setObjects((prev) => prev.map((o) =>
+                                  o.id === obj.id ? { ...o, latitude: lat } : o
+                                ));
+                              }}
+                            />
+                            <input
+                              type="text"
+                              placeholder="Lng"
+                              defaultValue={obj.longitude ? String(obj.longitude) : ""}
+                              className="w-24 rounded border border-gray-200 px-2 py-1 font-mono text-xs text-gray-700 focus:border-indigo-400 focus:outline-none"
+                              onBlur={async (e) => {
+                                if (!obj.id) return;
+                                const lng = parseFloat(e.target.value);
+                                if (isNaN(lng)) return;
+                                const lat = obj.latitude ?? 0;
+                                await fetch("/api/objects", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ id: obj.id, latitude: lat, longitude: lng }),
+                                });
+                                setObjects((prev) => prev.map((o) =>
+                                  o.id === obj.id ? { ...o, longitude: lng } : o
+                                ));
+                              }}
+                            />
+                          </div>
+                        </div>
                       </div>
 
                       {/* QR Code ID + Physical ID */}
