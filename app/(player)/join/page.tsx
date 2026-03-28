@@ -25,6 +25,7 @@ function JoinContent() {
   const setCurrentStepIndex = usePlayerStore((s) => s.setCurrentStepIndex);
   const setCollectedLetters = usePlayerStore((s) => s.setCollectedLetters);
   const storedSession = usePlayerStore((s) => s.session);
+  const storedTeam = usePlayerStore((s) => s.team);
 
   const [session, setLocalSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,6 +80,12 @@ function JoinContent() {
     }
 
     if (!code) { setError("No Access Key provided."); setLoading(false); return; }
+
+    // If team already exists for this session, resume directly
+    if (storedSession && storedTeam && storedSession.code === code.toUpperCase()) {
+      router.push("/navigate");
+      return;
+    }
 
     if (storedSession && storedSession.code === code.toUpperCase()) {
       setLocalSession(storedSession);
@@ -148,17 +155,14 @@ function JoinContent() {
         setTeamCharacter(char);
       } catch { /* no character data */ }
 
-      // Find active step
+      // Find active step index (don't set currentStep — player must scan)
       const activeProgress = progress.find((p) => p.status === "active");
       if (activeProgress) {
-        const activeStep = steps.find((s) => s.id === activeProgress.step_id);
-        if (activeStep) {
-          setCurrentStep(activeStep);
-          setCurrentStepIndex(steps.indexOf(activeStep));
-        }
+        const idx = steps.findIndex((s) => s.id === activeProgress.step_id);
+        if (idx >= 0) setCurrentStepIndex(idx);
       }
 
-      router.push("/play");
+      router.push("/navigate");
     } catch {
       setRecoveryError("Connection error.");
       setRecovering(false);
