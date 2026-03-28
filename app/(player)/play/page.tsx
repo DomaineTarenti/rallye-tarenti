@@ -91,35 +91,6 @@ export default function PlayPage() {
     return () => { supabase.removeChannel(ch); };
   }, [team]);
 
-  // Realtime: detect when a guardian validates an epreuve
-  useEffect(() => {
-    if (!team || !currentStep || currentStep.type !== "epreuve") return;
-
-    const ch = supabase
-      .channel(`progress-${team.id}`)
-      .on("postgres_changes", {
-        event: "UPDATE",
-        schema: "public",
-        table: "team_progress",
-        filter: `team_id=eq.${team.id}`,
-      }, (payload) => {
-        const row = payload.new as { step_id: string; status: string };
-        if (row.step_id === currentStep.id && row.status === "completed") {
-          console.log("[PLAY] Epreuve validated by guardian — advancing");
-          // Update local progress
-          setProgress(progress.map((p) =>
-            p.step_id === currentStep.id ? { ...p, status: "completed" as const, completed_at: new Date().toISOString() } : p
-          ));
-          setCurrentStepScore(30);
-          setScore(score + 30);
-          router.push("/celebrate");
-        }
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(ch); };
-  }, [team, currentStep, progress, score, setProgress, setCurrentStepScore, setScore, router]);
-
   const loadGameState = useCallback(async () => {
     if (!team || !session) return;
     setLoadingGame(true);
@@ -155,6 +126,30 @@ export default function PlayPage() {
   useEffect(() => {
     if (currentStep) { setStepStartTime(Date.now()); setHints([]); setUsedHintLevels([]); setAnswer(""); }
   }, [currentStep, setStepStartTime]);
+
+  // Realtime: detect when a guardian validates an epreuve
+  useEffect(() => {
+    if (!team || !currentStep || currentStep.type !== "epreuve") return;
+
+    const ch = supabase
+      .channel(`progress-${team.id}`)
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "team_progress",
+        filter: `team_id=eq.${team.id}`,
+      }, async (payload) => {
+        const row = payload.new as { step_id: string; status: string };
+        if (row.step_id === currentStep.id && row.status === "completed") {
+          console.log("[PLAY] Epreuve validated by guardian — reloading game state");
+          await loadGameState();
+          router.push("/celebrate");
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(ch); };
+  }, [team, currentStep, loadGameState, router]);
 
   if (!session || !team) { router.push("/"); return null; }
 
@@ -275,6 +270,14 @@ export default function PlayPage() {
     return null;
   }
 
+  // If current step is already completed in progress, clear it and go navigate
+  const stepProgress = progress.find((p) => p.step_id === currentStep.id);
+  if (stepProgress?.status === "completed") {
+    usePlayerStore.getState().setCurrentStep(null);
+    router.replace("/navigate");
+    return null;
+  }
+
   const step = currentStep;
   const enigmaType = getEnigmaInputType(step);
   const teamColor = teamCharacter?.color ?? "#7F77DD";
@@ -306,11 +309,8 @@ export default function PlayPage() {
       const result = json.data as { correct: boolean; message: string; hidden_letter?: string; physical_id?: string } | null;
 
       if (result?.correct) {
-        const updated = progress.map((p) =>
-          p.step_id === step.id ? { ...p, status: "completed" as const, completed_at: new Date().toISOString() } : p
-        );
-        setProgress(updated);
-        // Score calculated at the end — no per-step RP
+        // Reload full game state from DB to get correct next active step
+        await loadGameState();
         router.push("/celebrate");
       } else {
         setFeedback({ type: "error", msg: result?.message ?? "Not quite... try again!" });
@@ -381,11 +381,8 @@ export default function PlayPage() {
       const json = await res.json();
       const result = json.data;
       if (result?.valid) {
-        const updated = progress.map((p) =>
-          p.step_id === step.id ? { ...p, status: "completed" as const, completed_at: new Date().toISOString() } : p
-        );
-        setProgress(updated);
-        // Score calculated at the end — no per-step RP
+        // Reload full game state from DB to get correct next active step
+        await loadGameState();
         router.push("/celebrate");
       } else {
         setFeedback({ type: "error", msg: result?.message ?? "Invalid code" });
