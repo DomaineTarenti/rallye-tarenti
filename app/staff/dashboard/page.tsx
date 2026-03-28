@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ShieldCheck, Clock, CheckCircle2, XCircle, Users, LogOut, History,
@@ -48,11 +48,12 @@ export default function StaffDashboard() {
     if (mounted && !staffId) router.replace("/staff/login");
   }, [mounted, staffId, router]);
 
+  // Track validated teams so we don't re-show them
+  const validatedTeamsRef = useRef<Set<string>>(new Set());
+
   // Poll for teams waiting at THIS guardian's step (every 5s)
   useEffect(() => {
     if (!staffId || !assignedStepId) return;
-
-    let lastTeamId: string | null = null;
 
     async function pollForTeams() {
       const { data } = await supabase
@@ -61,35 +62,36 @@ export default function StaffDashboard() {
         .eq("step_id", assignedStepId!)
         .eq("status", "active");
 
-      if (data && data.length > 0 && !waitingTeam && !result) {
-        const row = data[0];
-        if (row.team_id === lastTeamId) return; // already shown
-        lastTeamId = row.team_id;
+      if (!data || data.length === 0) return;
+      if (waitingTeam || result) return; // already showing a team
 
-        const { data: team } = await supabase
-          .from("teams")
-          .select("id, name, character")
-          .eq("id", row.team_id)
-          .single();
+      // Find a team we haven't validated yet
+      const newTeam = data.find((row) => !validatedTeamsRef.current.has(row.team_id));
+      if (!newTeam) return;
 
-        if (team) {
-          if (typeof navigator !== "undefined" && navigator.vibrate) {
-            navigator.vibrate([200, 100, 200]);
-          }
-          setWaitingTeam({
-            id: row.id,
-            teamId: team.id,
-            teamName: team.name,
-            character: parseChar(team.character),
-            stepId: assignedStepId!,
-            arrivedAt: Date.now(),
-          });
-          setResult(null);
+      const { data: team } = await supabase
+        .from("teams")
+        .select("id, name, character")
+        .eq("id", newTeam.team_id)
+        .single();
+
+      if (team) {
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate([200, 100, 200]);
         }
+        setWaitingTeam({
+          id: newTeam.id,
+          teamId: team.id,
+          teamName: team.name,
+          character: parseChar(team.character),
+          stepId: assignedStepId!,
+          arrivedAt: Date.now(),
+        });
+        setResult(null);
       }
     }
 
-    pollForTeams(); // check immediately
+    pollForTeams();
     const interval = setInterval(pollForTeams, 5000);
     return () => clearInterval(interval);
   }, [assignedStepId, staffId, waitingTeam, result]);
@@ -150,14 +152,9 @@ export default function StaffDashboard() {
     });
 
     if (success) {
-      // Also activate next step
-      await fetch("/api/admin/unlock", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ team_id: waitingTeam.teamId, step_id: waitingTeam.stepId }),
-      });
+      // Mark this team as validated so polling doesn't re-show it
+      validatedTeamsRef.current.add(waitingTeam.teamId);
       incrementValidated();
-      // Update staff counter in DB
       await supabase
         .from("staff_members")
         .update({ teams_validated: teamsValidated + 1 })

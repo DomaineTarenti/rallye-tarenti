@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
+import { activateNextStep } from "@/lib/progress";
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { ApiResponse, TeamProgress } from "@/lib/types";
 
@@ -14,7 +15,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Rate limit: 10 validations/min per team
   const rl = checkRateLimit(`validate:${team_id}`);
   if (!rl.allowed) {
     return NextResponse.json<ApiResponse>(
@@ -42,6 +42,11 @@ export async function POST(req: NextRequest) {
       { data: null, error: error.message },
       { status: 500 }
     );
+  }
+
+  // If validated successfully, activate the next step
+  if (success) {
+    await activateNextStep(supabase, team_id);
   }
 
   return NextResponse.json<ApiResponse<TeamProgress>>({ data, error: null });
