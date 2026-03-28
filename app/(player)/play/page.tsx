@@ -142,8 +142,7 @@ export default function PlayPage() {
       }, async (payload) => {
         const row = payload.new as { step_id: string; status: string };
         if (row.step_id === currentStep.id && row.status === "completed") {
-          console.log("[PLAY] Epreuve validated by guardian — reloading game state");
-          await loadGameState();
+          console.log("[PLAY] Epreuve validated by guardian — going to celebrate");
           router.push("/celebrate");
         }
       })
@@ -323,9 +322,9 @@ export default function PlayPage() {
       const result = json.data as { correct: boolean; message: string; hidden_letter?: string; physical_id?: string } | null;
 
       if (result?.correct) {
-        // Reload full game state from DB to get correct next active step
-        await loadGameState();
+        // Navigate to celebrate FIRST, then state refreshes on /navigate
         router.push("/celebrate");
+        return;
       } else {
         setFeedback({ type: "error", msg: result?.message ?? "Not quite... try again!" });
         setShaking(true);
@@ -395,8 +394,7 @@ export default function PlayPage() {
       const json = await res.json();
       const result = json.data;
       if (result?.valid) {
-        // Reload full game state from DB to get correct next active step
-        await loadGameState();
+        // Navigate to celebrate — state refreshes on /navigate after
         router.push("/celebrate");
       } else {
         setFeedback({ type: "error", msg: result?.message ?? "Invalid code" });
