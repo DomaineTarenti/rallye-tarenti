@@ -230,6 +230,8 @@ export default function CharacterPage() {
         {/* Checkbox */}
         <label className="mb-6 flex w-full max-w-xs cursor-pointer items-center gap-3 rounded-xl bg-surface p-3">
           <input
+            id="code-noted"
+            name="code-noted"
             type="checkbox"
             checked={codeNoted}
             onChange={(e) => setCodeNoted(e.target.checked)}
@@ -278,7 +280,7 @@ export default function CharacterPage() {
       </Card>
 
       <div className="mb-6">
-        <Input label="Fellowship Name *" value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="The Unbroken Circle" maxLength={30} className="bg-surface" />
+        <Input id="team-name" name="team-name" label="Fellowship Name *" value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="The Unbroken Circle" maxLength={30} autoComplete="off" className="bg-surface" />
       </div>
 
       <div className="mb-6">
@@ -303,7 +305,7 @@ export default function CharacterPage() {
       </div>
 
       <div className="mb-6">
-        <Input label="Echo of Valour (optional)" value={warCry} onChange={(e) => setWarCry(e.target.value)} placeholder="Through fire we rise!" maxLength={50} className="bg-surface" />
+        <Input id="war-cry" name="war-cry" label="Echo of Valour (optional)" value={warCry} onChange={(e) => setWarCry(e.target.value)} placeholder="Through fire we rise!" maxLength={50} autoComplete="off" className="bg-surface" />
       </div>
 
       <div className="mb-8">

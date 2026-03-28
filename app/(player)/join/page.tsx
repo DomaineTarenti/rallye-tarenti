@@ -244,10 +244,13 @@ function JoinContent() {
             <p className="mb-3 text-sm font-medium text-gray-300">Enter your Fellowship Code</p>
             <div className="flex gap-2">
               <Input
+                id="recovery-code"
+                name="recovery-code"
                 value={recoveryCode}
                 onChange={(e) => setRecoveryCode(e.target.value.toUpperCase())}
                 placeholder="LIO42"
                 maxLength={10}
+                autoComplete="off"
                 className="bg-deep text-center font-mono tracking-widest"
               />
               <Button onClick={handleRecover} disabled={!recoveryCode.trim() || recovering}>

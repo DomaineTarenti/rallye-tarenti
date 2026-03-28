@@ -41,11 +41,14 @@ function HomeContent() {
 
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
         <input
+          id="access-code"
+          name="access-code"
           type="text"
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase())}
           placeholder="Access Key"
           maxLength={10}
+          autoComplete="off"
           className="w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-center text-xl font-mono tracking-widest text-white placeholder-gray-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
           autoFocus
         />

@@ -210,10 +210,13 @@ export default function PlayPage() {
               <p className="mb-3 font-medium text-white">{session.intro_enigme}</p>
               <div className="flex gap-2">
                 <input
+                  id="intro-answer"
+                  name="intro-answer"
                   type="text"
                   value={answer}
                   onChange={(e) => setAnswer(e.target.value)}
                   placeholder="Your answer..."
+                  autoComplete="off"
                   className="flex-1 rounded-xl border border-white/10 bg-deep px-4 py-3 text-white placeholder-gray-500 focus:border-primary focus:outline-none"
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && answer.trim()) {
@@ -589,7 +592,7 @@ export default function PlayPage() {
 
           {enigmaType === "text" && (
             <div className="flex gap-2">
-              <input type="text" value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Your answer..."
+              <input id="answer" name="answer" type="text" value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Your answer..." autoComplete="off"
                 className="flex-1 rounded-xl border border-white/10 bg-deep px-4 py-3 text-white placeholder-gray-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
                 onKeyDown={(e) => e.key === "Enter" && handleSubmitAnswer()} />
               <Button onClick={handleSubmitAnswer} disabled={!answer.trim() || submitting} className="px-4"><Send className="h-4 w-4" /></Button>
@@ -598,7 +601,7 @@ export default function PlayPage() {
 
           {enigmaType === "code" && (
             <div className="flex gap-2">
-              <input type="number" inputMode="numeric" value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="0000"
+              <input id="answer-code" name="answer-code" type="number" inputMode="numeric" value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="0000" autoComplete="off"
                 className="flex-1 rounded-xl border border-white/10 bg-deep px-4 py-3 text-center font-mono text-xl tracking-[0.3em] text-white placeholder-gray-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
                 onKeyDown={(e) => e.key === "Enter" && handleSubmitAnswer()} />
               <Button onClick={handleSubmitAnswer} disabled={!answer.trim() || submitting} className="px-4"><Send className="h-4 w-4" /></Button>
@@ -642,12 +645,15 @@ export default function PlayPage() {
                 <p className="mb-2 text-center text-xs text-gray-500">Or enter the Guardian&apos;s code</p>
                 <div className="flex gap-2">
                   <input
+                    id="staff-code"
+                    name="staff-code"
                     type="text"
                     inputMode="numeric"
                     value={answer}
                     onChange={(e) => setAnswer(e.target.value)}
                     placeholder="4-digit code"
                     maxLength={4}
+                    autoComplete="off"
                     className="flex-1 rounded-xl border border-white/10 bg-deep px-4 py-3 text-center font-mono text-xl tracking-[0.3em] text-white placeholder-gray-500 focus:border-primary focus:outline-none"
                     onKeyDown={(e) => e.key === "Enter" && answer.trim().length === 4 && handleStaffCode()}
                   />
