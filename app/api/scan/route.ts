@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
       console.log("[SCAN] No progress — auto-initializing for team", team_id);
       const initialized = await initializeProgress(supabase, team_id, resolvedSessionId, team.object_order);
       if (!initialized) {
-        return json({ valid: false, reason: "unknown", message: "Could not initialize game progress. Contact an organiser." });
+        return json({ valid: false, reason: "unknown", message: "The scenario hasn't been generated yet. Ask the organiser to run 'Generate with AI' first." });
       }
       // Re-fetch progress after initialization
       const { data: freshProgress } = await supabase
