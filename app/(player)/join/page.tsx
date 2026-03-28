@@ -81,11 +81,6 @@ function JoinContent() {
 
     if (!code) { setError("No Access Key provided."); setLoading(false); return; }
 
-    // If entering a different session code, clear stale store data
-    if (storedSession && storedSession.code !== code.toUpperCase()) {
-      usePlayerStore.getState().reset();
-    }
-
     // If team already exists for this session, resume directly
     if (storedSession && storedTeam && storedSession.code === code.toUpperCase()) {
       router.push("/navigate");
@@ -110,6 +105,11 @@ function JoinContent() {
           joinPrecreatedTeam(code.trim().toUpperCase());
           return;
         }
+
+        // New session — clear any stale data from previous session
+        if (storedSession && storedSession.id !== json.data.id) {
+          usePlayerStore.getState().reset();
+        }
         const s = json.data;
         if (s.status !== "active") {
           setError(s.status === "draft" ? "This session has not yet begun." : s.status === "completed" ? "This session has ended." : "This session is currently paused.");
@@ -126,7 +126,8 @@ function JoinContent() {
     }
     fetchSession();
     return () => { cancelled = true; };
-  }, [code, teamCode, storedSession, setSession]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, teamCode]);
 
   async function handleRecover() {
     if (!recoveryCode.trim() || !session) return;
