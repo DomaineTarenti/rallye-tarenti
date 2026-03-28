@@ -48,63 +48,51 @@ export default function StaffDashboard() {
     if (mounted && !staffId) router.replace("/staff/login");
   }, [mounted, staffId, router]);
 
-  // Listen for teams arriving at THIS guardian's step only
+  // Poll for teams waiting at THIS guardian's step (every 5s)
   useEffect(() => {
-    if (!staffId || !sessionId || !assignedStepId) return;
+    if (!staffId || !assignedStepId) return;
 
-    async function showTeam(teamId: string) {
-      const { data: team } = await supabase
-        .from("teams")
-        .select("id, name, character")
-        .eq("id", teamId)
-        .single();
+    let lastTeamId: string | null = null;
 
-      if (team) {
-        if (typeof navigator !== "undefined" && navigator.vibrate) {
-          navigator.vibrate([200, 100, 200]);
+    async function pollForTeams() {
+      const { data } = await supabase
+        .from("team_progress")
+        .select("id, team_id, step_id, status")
+        .eq("step_id", assignedStepId!)
+        .eq("status", "active");
+
+      if (data && data.length > 0 && !waitingTeam && !result) {
+        const row = data[0];
+        if (row.team_id === lastTeamId) return; // already shown
+        lastTeamId = row.team_id;
+
+        const { data: team } = await supabase
+          .from("teams")
+          .select("id, name, character")
+          .eq("id", row.team_id)
+          .single();
+
+        if (team) {
+          if (typeof navigator !== "undefined" && navigator.vibrate) {
+            navigator.vibrate([200, 100, 200]);
+          }
+          setWaitingTeam({
+            id: row.id,
+            teamId: team.id,
+            teamName: team.name,
+            character: parseChar(team.character),
+            stepId: assignedStepId!,
+            arrivedAt: Date.now(),
+          });
+          setResult(null);
         }
-        setWaitingTeam({
-          id: teamId,
-          teamId: team.id,
-          teamName: team.name,
-          character: parseChar(team.character),
-          stepId: assignedStepId!,
-          arrivedAt: Date.now(),
-        });
-        setResult(null);
       }
     }
 
-    const ch = supabase
-      .channel(`staff-${staffId}`)
-      // Channel 1: team_progress on THIS guardian's assigned step ONLY
-      .on("postgres_changes", {
-        event: "UPDATE",
-        schema: "public",
-        table: "team_progress",
-        filter: `step_id=eq.${assignedStepId}`,
-      }, (payload) => {
-        const row = payload.new as { team_id: string; step_id: string; status: string };
-        if (row.status === "active" && row.step_id === assignedStepId) {
-          showTeam(row.team_id);
-        }
-      })
-      // Channel 2: team_messages targeted at THIS guardian
-      .on("postgres_changes", {
-        event: "INSERT",
-        schema: "public",
-        table: "team_messages",
-        filter: `staff_id=eq.${staffId}`,
-      }, (payload) => {
-        const row = payload.new as { team_id: string; type: string };
-        if (row.type === "epreuve_request") {
-          showTeam(row.team_id);
-        }
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(ch); };
-  }, [assignedStepId, sessionId, staffId]);
+    pollForTeams(); // check immediately
+    const interval = setInterval(pollForTeams, 5000);
+    return () => clearInterval(interval);
+  }, [assignedStepId, staffId, waitingTeam, result]);
 
   // Timer for waiting team
   useEffect(() => {
