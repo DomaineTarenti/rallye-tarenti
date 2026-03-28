@@ -105,12 +105,25 @@ export default function NavigatePage() {
     };
   }, [hasGPS]);
 
-  // Listen to device orientation for compass
+  // Listen to device orientation for compass (with iOS permission request)
   useEffect(() => {
     function handleOrientation(e: DeviceOrientationEvent) {
       if (e.alpha != null) setHeading(e.alpha);
     }
-    window.addEventListener("deviceorientation", handleOrientation);
+
+    async function startOrientation() {
+      // iOS 13+ requires explicit permission
+      const doe = DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };
+      if (typeof doe.requestPermission === "function") {
+        try {
+          const perm = await doe.requestPermission();
+          if (perm !== "granted") return;
+        } catch { return; }
+      }
+      window.addEventListener("deviceorientation", handleOrientation);
+    }
+
+    startOrientation();
     return () => window.removeEventListener("deviceorientation", handleOrientation);
   }, []);
 
@@ -146,7 +159,8 @@ export default function NavigatePage() {
     );
   }
 
-  const canScan = !hasGPS || (distance != null && distance < 10);
+  const isClose = distance != null && distance < 10;
+  const canScan = !hasGPS || isClose || userLat == null;
 
   return (
     <main className="flex min-h-[100dvh] flex-col bg-deep text-white">
@@ -157,6 +171,16 @@ export default function NavigatePage() {
       </div>
 
       <div className="flex flex-1 flex-col items-center justify-center px-6">
+        {/* GPS acquiring */}
+        {hasGPS && !gpsError && userLat == null && (
+          <div className="mb-6 flex flex-col items-center">
+            <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-surface">
+              <Navigation className="h-10 w-10 animate-pulse text-primary" />
+            </div>
+            <p className="text-sm text-gray-400">Acquiring GPS signal...</p>
+          </div>
+        )}
+
         {/* GPS available — show compass */}
         {hasGPS && !gpsError && userLat != null ? (
           <>
@@ -246,7 +270,7 @@ export default function NavigatePage() {
           className={`w-full ${canScan ? "animate-pulse" : ""}`}
         >
           <QrCode className="mr-2 h-5 w-5" />
-          {canScan ? "I found it — Scan!" : "Scan the artifact"}
+          {isClose ? "I found it — Scan!" : "Scan the artifact"}
         </Button>
       </div>
     </main>
