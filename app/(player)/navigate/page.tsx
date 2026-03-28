@@ -49,9 +49,11 @@ export default function NavigatePage() {
     } catch { /* silent */ }
   }, [team, session, setObjects, setSteps, setProgress, setCurrentStepIndex, setCollectedLetters]);
 
+  // Always reload game state when navigate mounts — ensures fresh active step
   useEffect(() => {
-    if (team && session && (steps.length === 0 || progress.length === 0)) loadGameState();
-  }, [team, session, steps.length, progress.length, loadGameState]);
+    if (team && session) loadGameState();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [team?.id, session?.id]);
 
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
