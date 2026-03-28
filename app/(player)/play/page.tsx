@@ -62,7 +62,7 @@ export default function PlayPage() {
   const [loadingGame, setLoadingGame] = useState(false);
   const [photoExpanded, setPhotoExpanded] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"play" | "journal">("play");
+  const [activeTab, setActiveTab] = useState<"quest" | "journal" | "map">("quest");
   const [introDismissed, setIntroDismissed] = useState(false);
   const [elapsed, setElapsed] = useState("00:00");
   const startTime = usePlayerStore((s) => s.startTime);
@@ -430,16 +430,22 @@ export default function PlayPage() {
         {/* Tab bar */}
         <div className="mt-2 flex gap-1">
           <button
-            onClick={() => setActiveTab("play")}
-            className={`flex-1 rounded-lg py-1.5 text-[10px] font-semibold uppercase tracking-wider transition ${activeTab === "play" ? "bg-white/10 text-white" : "text-gray-500"}`}
+            onClick={() => setActiveTab("quest")}
+            className={`flex-1 rounded-lg py-1.5 text-[10px] font-semibold uppercase tracking-wider transition ${activeTab === "quest" ? "bg-white/10 text-white" : "text-gray-500"}`}
           >
             Quest
           </button>
           <button
             onClick={() => setActiveTab("journal")}
-            className={`flex flex-1 items-center justify-center gap-1 rounded-lg py-1.5 text-[10px] font-semibold uppercase tracking-wider transition ${activeTab === "journal" ? "bg-white/10 text-white" : "text-gray-500"}`}
+            className={`flex-1 rounded-lg py-1.5 text-[10px] font-semibold uppercase tracking-wider transition ${activeTab === "journal" ? "bg-white/10 text-white" : "text-gray-500"}`}
           >
-            <BookOpen className="h-3 w-3" /> Journal
+            Journal
+          </button>
+          <button
+            onClick={() => setActiveTab("map")}
+            className={`flex-1 rounded-lg py-1.5 text-[10px] font-semibold uppercase tracking-wider transition ${activeTab === "map" ? "bg-white/10 text-white" : "text-gray-500"}`}
+          >
+            Map
           </button>
         </div>
       </div>
@@ -471,6 +477,60 @@ export default function PlayPage() {
               {Object.keys(collectedLetters).length} / {objects.length} clues collected
             </p>
           </Card>
+        </div>
+      ) : activeTab === "map" ? (
+        <div className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="mx-auto flex max-w-xs flex-col items-center">
+            {steps.map((s, idx) => {
+              const stepProgress = progress.find((p) => p.step_id === s.id);
+              const status = (stepProgress?.status as string) ?? "locked";
+              const isActive = status === "active";
+              const isCompleted = status === "completed";
+              const isLast = idx === steps.length - 1;
+              const obj = objects.find((o) => o.id === s.object_id);
+              const objName = obj?.narrative_name || (obj?.name ?? `Chapter ${idx + 1}`);
+              const offset = idx % 2 === 0 ? -25 : 25;
+
+              return (
+                <div key={s.id} className="flex w-full flex-col items-center">
+                  {idx > 0 && (
+                    <div className="relative h-10 w-full">
+                      <svg className="absolute inset-0 h-full w-full" viewBox="0 0 200 40" preserveAspectRatio="none">
+                        <path
+                          d={`M ${100 + (idx % 2 === 0 ? 25 : -25)} 0 Q 100 20 ${100 + offset} 40`}
+                          fill="none"
+                          stroke={isCompleted || isActive ? teamColor : "#ffffff15"}
+                          strokeWidth={isCompleted ? 3 : 2}
+                          strokeDasharray={isCompleted ? "none" : "6 4"}
+                        />
+                      </svg>
+                    </div>
+                  )}
+                  <div className="relative flex flex-col items-center" style={{ transform: `translateX(${offset}px)` }}>
+                    <div
+                      className={`flex items-center justify-center rounded-full border-2 ${
+                        isCompleted ? "h-12 w-12 border-transparent text-white"
+                        : isActive ? "h-14 w-14 animate-node-pulse border-transparent text-white"
+                        : "h-10 w-10 border-white/10 text-gray-600"
+                      }`}
+                      style={{
+                        backgroundColor: isCompleted || isActive ? teamColor : "rgba(255,255,255,0.03)",
+                        ["--pulse-color" as string]: teamColor + "50",
+                      }}
+                    >
+                      {isCompleted ? <span className="text-sm">&#x2713;</span>
+                        : isLast ? <span className="text-sm">&#x1F3C6;</span>
+                        : isActive ? <span className="text-sm font-bold">{idx + 1}</span>
+                        : <span className="text-xs">&#x1F512;</span>}
+                    </div>
+                    <p className={`mt-1 max-w-[120px] text-center text-[10px] leading-tight ${
+                      isCompleted ? "text-gray-300" : isActive ? "font-bold text-white" : "text-gray-600"
+                    }`}>{objName}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       ) : (
       <>
@@ -627,11 +687,6 @@ export default function PlayPage() {
           </div>
         )}
 
-        {/* Navigate button — go find the next object */}
-        <Button onClick={() => router.push("/navigate")} variant="secondary" className="flex w-full items-center justify-center gap-2">
-          <Compass className="h-5 w-5" />
-          <span>View map / Navigate</span>
-        </Button>
       </div>
       </>
       )}
