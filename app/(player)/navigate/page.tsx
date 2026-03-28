@@ -25,19 +25,19 @@ export default function NavigatePage() {
 
   const progress = usePlayerStore((s) => s.progress);
 
-  // Derive the team-relative chapter from completed progress count
+  // Derive chapter from completed count
   const completedCount = progress.filter((p) => p.status === "completed").length;
   const chapterNumber = completedCount + 1;
   const totalChapters = team?.object_order?.length ?? steps.length;
 
-  // Find the target object from the team's object_order at the current position
-  const nextObjectId = team?.object_order?.[completedCount] ?? null;
-  const targetObject = nextObjectId ? objects.find((o) => o.id === nextObjectId) : null;
+  // Find the active step from progress — this is the source of truth
+  const activeProgress = progress.find((p) => p.status === "active");
+  const activeStep = activeProgress ? steps.find((s) => s.id === activeProgress.step_id) : null;
 
-  // Fallback: use steps[currentStepIndex] if object_order doesn't resolve
-  const fallbackStep = steps[currentStepIndex];
-  const fallbackObject = fallbackStep ? objects.find((o) => o.id === fallbackStep.object_id) : null;
-  const resolvedObject = targetObject ?? fallbackObject ?? null;
+  // Target object = the object linked to the active step
+  const resolvedObject = activeStep
+    ? objects.find((o) => o.id === activeStep.object_id)
+    : (steps[currentStepIndex] ? objects.find((o) => o.id === steps[currentStepIndex].object_id) : null);
 
   const targetLat = resolvedObject?.latitude ?? null;
   const targetLng = resolvedObject?.longitude ?? null;
