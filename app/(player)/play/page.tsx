@@ -629,10 +629,10 @@ export default function PlayPage() {
           </div>
         )}
 
-        {/* Scan button with object context */}
-        <Button onClick={() => router.push("/scan")} className="flex w-full items-center justify-center gap-2">
-          <QrCode className="h-5 w-5" />
-          <span className="truncate">Scan: {objectName}</span>
+        {/* Navigate button — go find the next object */}
+        <Button onClick={() => router.push("/navigate")} variant="secondary" className="flex w-full items-center justify-center gap-2">
+          <Compass className="h-5 w-5" />
+          <span>View map / Navigate</span>
         </Button>
       </div>
       </>
