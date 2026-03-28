@@ -61,11 +61,23 @@ function JoinContent() {
         setCollectedLetters((data.team as Record<string, unknown>).collected_letters as Record<string, string>);
       }
 
-      const stepsArr = data.steps as Array<Record<string, unknown>>;
-      if (stepsArr.length > 0) setCurrentStep(stepsArr[0] as never);
+      // Parse character if exists
+      const teamData = data.team as Record<string, unknown>;
+      if (teamData.character) {
+        try {
+          const char = typeof teamData.character === "string"
+            ? JSON.parse(teamData.character)
+            : teamData.character;
+          setTeamCharacter(char);
+        } catch { /* no character */ }
+      }
 
-      // Go to character selection (simplified — just pick animal/color)
-      router.push("/character");
+      // If team already has a character and is playing, resume directly
+      if (teamData.character && teamData.status === "playing") {
+        router.push("/navigate");
+      } else {
+        router.push("/character");
+      }
     } catch {
       setError("Connection error.");
       setLoading(false);
