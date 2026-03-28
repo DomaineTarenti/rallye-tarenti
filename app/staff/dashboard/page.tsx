@@ -56,16 +56,17 @@ export default function StaffDashboard() {
     if (!staffId || !assignedStepId) return;
 
     async function pollForTeams() {
+      // Only find teams at this step that are active AND not yet validated
       const { data } = await supabase
         .from("team_progress")
-        .select("id, team_id, step_id, status")
+        .select("id, team_id, step_id, status, epreuve_success")
         .eq("step_id", assignedStepId!)
-        .eq("status", "active");
+        .eq("status", "active")
+        .is("epreuve_success", null);
 
       if (!data || data.length === 0) return;
-      if (waitingTeam || result) return; // already showing a team
+      if (waitingTeam || result) return;
 
-      // Find a team we haven't validated yet
       const newTeam = data.find((row) => !validatedTeamsRef.current.has(row.team_id));
       if (!newTeam) return;
 
