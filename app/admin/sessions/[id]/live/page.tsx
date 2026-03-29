@@ -50,6 +50,7 @@ export default function LiveDashboard() {
   const [msgModal, setMsgModal] = useState<{ teamId: string; teamName: string } | null>(null);
   const [msgText, setMsgText] = useState("");
   const [msgSending, setMsgSending] = useState(false);
+  const [chatHistory, setChatHistory] = useState<Array<{ id: string; message: string; type: string; created_at: string }>>([]);
   const [unlockModal, setUnlockModal] = useState<{ teamId: string; teamName: string } | null>(null);
   const [unlockStepId, setUnlockStepId] = useState("");
   const [timeAdded, setTimeAdded] = useState<string | null>(null);
@@ -116,6 +117,18 @@ export default function LiveDashboard() {
 
   // ── Actions ──
 
+  async function openChat(teamId: string, teamName: string) {
+    setMsgModal({ teamId, teamName });
+    setMsgText("");
+    setChatHistory([]);
+    const { data } = await supabase
+      .from("team_messages")
+      .select("id, message, type, created_at")
+      .eq("team_id", teamId)
+      .order("created_at", { ascending: true });
+    if (data) setChatHistory(data);
+  }
+
   async function sendMessage() {
     if (!msgModal || !msgText.trim()) return;
     setMsgSending(true);
@@ -124,9 +137,9 @@ export default function LiveDashboard() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ team_id: msgModal.teamId, session_id: sessionId, message: msgText.trim() }),
     });
-    setMsgSending(false);
-    setMsgModal(null);
+    setChatHistory((prev) => [...prev, { id: Date.now().toString(), message: msgText.trim(), type: "message", created_at: new Date().toISOString() }]);
     setMsgText("");
+    setMsgSending(false);
   }
 
   async function doUnlockCurrentStep(teamId: string) {
@@ -263,11 +276,17 @@ export default function LiveDashboard() {
                     const ch = parseChar(team.character);
                     const hasStarted = !!team.started_at;
                     const isFinished = team.status === "finished";
-                    const sc = isFinished ? (team.final_score ?? 0) : null;
-                    const rk = sc !== null ? getRank(sc) : null;
                     const el = isFinished && team.completion_time
                       ? team.completion_time
                       : hasStarted ? team.elapsed_seconds + tick * 10 : 0;
+                    // Live score: 1000 - 2pts/min - hints penalty (15 per hint as estimate)
+                    const liveMinutes = Math.floor(el / 60);
+                    const sc = isFinished
+                      ? (team.final_score ?? 0)
+                      : hasStarted
+                      ? Math.max(0, 1000 - liveMinutes * 2 - team.hints_used * 15)
+                      : null;
+                    const rk = sc !== null ? getRank(sc) : null;
                     const stuck = team.status === "playing" && team.hints_used > 2;
 
                     return (
@@ -305,9 +324,9 @@ export default function LiveDashboard() {
                               className={`rounded-lg p-1.5 transition ${helpTeamId === team.id ? "bg-red-100 text-red-600 hover:bg-red-200" : "text-gray-400 hover:bg-gray-100 hover:text-indigo-600"} disabled:opacity-30`}>
                               {actionLoading === `unlock-${team.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unlock className="h-3.5 w-3.5" />}
                             </button>
-                            {/* Message */}
-                            <button onClick={() => { setMsgModal({ teamId: team.id, teamName: team.name }); setMsgText(""); }}
-                              title="Send message" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-blue-600">
+                            {/* Message / Chat */}
+                            <button onClick={() => openChat(team.id, team.name)}
+                              title="Chat with team" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-blue-600">
                               <MessageSquare className="h-3.5 w-3.5" />
                             </button>
                             {/* Add time */}
@@ -335,30 +354,51 @@ export default function LiveDashboard() {
         </div>
       </div>
 
-      {/* ── Message Modal ── */}
+      {/* ── Chat Modal ── */}
       {msgModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setMsgModal(null)}>
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">Message to {msgModal.teamName}</h3>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900">Chat — {msgModal.teamName}</h3>
               <button onClick={() => setMsgModal(null)}><X className="h-5 w-5 text-gray-400" /></button>
             </div>
-            <textarea
-              value={msgText}
-              onChange={(e) => setMsgText(e.target.value)}
-              placeholder="Type your message..."
-              rows={3}
-              className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-400 focus:outline-none"
-              autoFocus
-            />
-            <button
-              onClick={sendMessage}
-              disabled={!msgText.trim() || msgSending}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
-              <Send className="h-4 w-4" />
-              {msgSending ? "Sending..." : "Send Message"}
-            </button>
+
+            {/* Chat history */}
+            <div className="mb-3 max-h-60 overflow-y-auto rounded-lg bg-gray-50 p-3 space-y-2">
+              {chatHistory.length === 0 && (
+                <p className="text-xs text-gray-400 italic text-center">No messages yet</p>
+              )}
+              {chatHistory.map((msg) => (
+                <div key={msg.id} className={`rounded-lg px-3 py-1.5 text-sm ${
+                  msg.type === "player_message" || msg.type === "help_request"
+                    ? "bg-indigo-50 text-indigo-700 mr-12"
+                    : "bg-white text-gray-700 ml-12 border border-gray-200"
+                }`}>
+                  <span className="text-[10px] font-medium text-gray-400">
+                    {msg.type === "player_message" ? "Player" : msg.type === "help_request" ? "🆘 Help" : "You"}
+                  </span>
+                  <p>{msg.message}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                value={msgText}
+                onChange={(e) => setMsgText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                placeholder="Reply to the team..."
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-400 focus:outline-none"
+                autoFocus
+              />
+              <button
+                onClick={sendMessage}
+                disabled={!msgText.trim() || msgSending}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
       )}
