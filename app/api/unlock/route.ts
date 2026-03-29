@@ -74,6 +74,17 @@ export async function POST(req: NextRequest) {
       })
       .eq("id", team_id);
 
+    // Calculate position among all teams in this session
+    const { data: allTeams } = await supabase
+      .from("teams")
+      .select("id, final_score, status")
+      .eq("session_id", team.session_id)
+      .eq("status", "finished")
+      .order("final_score", { ascending: false });
+
+    const position = (allTeams ?? []).findIndex((t) => t.id === team_id) + 1;
+    const totalFinished = (allTeams ?? []).length;
+
     return NextResponse.json<ApiResponse>({
       data: {
         success: true,
@@ -89,6 +100,8 @@ export async function POST(req: NextRequest) {
           return t + 15;
         }, 0),
         hints_count: allHints.length,
+        position,
+        total_finished: totalFinished,
       },
       error: null,
     });

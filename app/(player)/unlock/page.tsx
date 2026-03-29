@@ -18,6 +18,8 @@ interface UnlockResult {
   time_penalty?: number;
   hint_penalty?: number;
   hints_count?: number;
+  position?: number;
+  total_finished?: number;
 }
 
 export default function UnlockPage() {
@@ -202,6 +204,21 @@ export default function UnlockPage() {
               <span>{finalResult.final_score}</span>
             </div>
           </div>
+
+          {/* Position / Leaderboard */}
+          {finalResult.position && (
+            <div className="mb-6 w-full max-w-xs rounded-xl bg-white/10 p-4 text-center backdrop-blur">
+              <p className="text-xs uppercase tracking-wider text-white/50">Leaderboard</p>
+              <p className="mt-1 text-4xl font-black text-white">
+                {finalResult.position === 1 ? "&#x1F947;" : finalResult.position === 2 ? "&#x1F948;" : finalResult.position === 3 ? "&#x1F949;" : `#${finalResult.position}`}
+              </p>
+              <p className="mt-1 text-sm text-white/60">
+                {finalResult.position === 1
+                  ? "You are the champions!"
+                  : `${finalResult.position}${finalResult.position === 2 ? "nd" : finalResult.position === 3 ? "rd" : "th"} out of ${finalResult.total_finished} team${(finalResult.total_finished ?? 0) > 1 ? "s" : ""}`}
+              </p>
+            </div>
+          )}
 
           <button
             onClick={() => router.push("/map")}
