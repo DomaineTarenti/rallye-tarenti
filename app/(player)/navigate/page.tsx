@@ -59,8 +59,10 @@ export default function NavigatePage() {
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
   const [heading, setHeading] = useState(0);
+  const [isIOSCompass, setIsIOSCompass] = useState(false);
   const [compassActive, setCompassActive] = useState(false);
   const [needsCompassPermission, setNeedsCompassPermission] = useState(false);
+  const headingRef = useRef(0);
   const [gpsError, setGpsError] = useState(false);
   const [gpsDenied, setGpsDenied] = useState(false);
   const [showPhoto, setShowPhoto] = useState(false);
@@ -118,35 +120,49 @@ export default function NavigatePage() {
     };
   }, []);
 
-  // Compass orientation listener
-  useEffect(() => {
-    function handleOrientation(e: DeviceOrientationEvent) {
-      // iOS provides webkitCompassHeading (true north), Android uses alpha
-      const h = (e as unknown as { webkitCompassHeading?: number }).webkitCompassHeading;
-      if (h != null) {
-        setHeading(h);
-      } else if (e.alpha != null) {
-        setHeading(e.alpha);
-      }
-      setCompassActive(true);
-    }
+  // Compass orientation — smooth heading updates
+  function updateHeading(rawHeading: number) {
+    // Smooth the heading to avoid jitter (low-pass filter)
+    const prev = headingRef.current;
+    let diff = rawHeading - prev;
+    // Handle wrap-around (350° → 10° should be +20, not -340)
+    if (diff > 180) diff -= 360;
+    if (diff < -180) diff += 360;
+    const smoothed = (prev + diff * 0.3 + 360) % 360;
+    headingRef.current = smoothed;
+    setHeading(smoothed);
+    setCompassActive(true);
+  }
 
-    // Check if iOS requires permission (must be triggered by user gesture)
+  function handleOrientation(e: DeviceOrientationEvent) {
+    const webkit = (e as unknown as { webkitCompassHeading?: number }).webkitCompassHeading;
+    if (webkit != null && webkit >= 0) {
+      // iOS: webkitCompassHeading = degrees from true north (clockwise)
+      setIsIOSCompass(true);
+      updateHeading(webkit);
+    } else if (e.alpha != null) {
+      // Android: alpha = rotation around z-axis
+      // When absolute is true, alpha is from true north
+      // Convert: compass heading = (360 - alpha) % 360
+      const compassHeading = e.absolute ? (360 - e.alpha) % 360 : (360 - e.alpha) % 360;
+      setIsIOSCompass(false);
+      updateHeading(compassHeading);
+    }
+  }
+
+  useEffect(() => {
     const doe = DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };
     if (typeof doe.requestPermission === "function") {
       setNeedsCompassPermission(true);
     } else {
-      // Android / desktop — just listen
       window.addEventListener("deviceorientation", handleOrientation);
-      // Check if we get events after 2s
-      const timeout = setTimeout(() => {
-        if (!compassActive) setCompassActive(false);
-      }, 2000);
+      window.addEventListener("deviceorientationabsolute", handleOrientation as EventListener);
       return () => {
-        clearTimeout(timeout);
         window.removeEventListener("deviceorientation", handleOrientation);
+        window.removeEventListener("deviceorientationabsolute", handleOrientation as EventListener);
       };
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function requestCompassPermission() {
@@ -155,12 +171,7 @@ export default function NavigatePage() {
       const perm = await doe.requestPermission();
       if (perm === "granted") {
         setNeedsCompassPermission(false);
-        window.addEventListener("deviceorientation", (e) => {
-          const h = (e as unknown as { webkitCompassHeading?: number }).webkitCompassHeading;
-          if (h != null) setHeading(h);
-          else if (e.alpha != null) setHeading(e.alpha);
-          setCompassActive(true);
-        });
+        window.addEventListener("deviceorientation", handleOrientation);
       }
     } catch { /* denied */ }
   }
@@ -174,7 +185,9 @@ export default function NavigatePage() {
     ? getBearing(userLat, userLng, targetLat, targetLng)
     : 0;
 
-  const arrowAngle = bearing - heading;
+  // Arrow rotation: bearing is direction to target (from north), heading is where device points
+  // Arrow should point at (bearing - heading) degrees from the top of screen
+  const arrowAngle = ((bearing - heading) + 360) % 360;
   const distColor = distance != null ? getDistanceColor(distance) : "#FFFFFF";
 
   // Vibrate when close
