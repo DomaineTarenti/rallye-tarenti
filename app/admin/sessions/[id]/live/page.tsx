@@ -27,6 +27,7 @@ interface EnrichedTeam {
   current_step: number;
   hints_used: number;
   elapsed_seconds: number;
+  completion_time: number | null;
 }
 
 function formatElapsed(s: number) { const m = Math.floor(s / 60); return `${m}:${String(s % 60).padStart(2, "0")}`; }
@@ -264,7 +265,9 @@ export default function LiveDashboard() {
                     const isFinished = team.status === "finished";
                     const sc = isFinished ? (team.final_score ?? 0) : null;
                     const rk = sc !== null ? getRank(sc) : null;
-                    const el = hasStarted ? team.elapsed_seconds + tick * 10 : 0;
+                    const el = isFinished && team.completion_time
+                      ? team.completion_time
+                      : hasStarted ? team.elapsed_seconds + tick * 10 : 0;
                     const stuck = team.status === "playing" && team.hints_used > 2;
 
                     return (
