@@ -61,11 +61,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // If finished, return team data with score (don't block)
   if (team.status === "finished") {
-    return NextResponse.json<ApiResponse>(
-      { data: null, error: "This team has already finished." },
-      { status: 403 }
-    );
+    const session = team.sessions;
+    return NextResponse.json<ApiResponse>({
+      data: {
+        team: { ...team, sessions: undefined },
+        session,
+        finished: true,
+      },
+      error: null,
+    });
   }
 
   // Update team with player's chosen name/character if provided

@@ -128,16 +128,19 @@ export default function LiveDashboard() {
     setMsgText("");
   }
 
-  async function doUnlock() {
-    if (!unlockModal || !unlockStepId) return;
-    setActionLoading(`unlock-${unlockModal.teamId}`);
-    await fetch("/api/admin/unlock", {
+  async function doUnlockCurrentStep(teamId: string) {
+    setActionLoading(`unlock-${teamId}`);
+    // Find the team's current active step and complete it
+    await fetch("/api/admin/skip-step", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ team_id: unlockModal.teamId, step_id: unlockStepId }),
+      body: JSON.stringify({ team_id: teamId }),
     });
-    setUnlockModal(null);
-    setUnlockStepId("");
+    // Clear help state for this team
+    if (helpTeamId === teamId) {
+      setHelpAlert(null);
+      setHelpTeamId(null);
+    }
     await loadData();
     setActionLoading(null);
   }
@@ -292,10 +295,11 @@ export default function LiveDashboard() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex gap-1">
-                            {/* Unlock */}
-                            <button onClick={() => { setUnlockModal({ teamId: team.id, teamName: team.name }); setUnlockStepId(""); }}
-                              disabled={team.status !== "playing"} title="Unlock step"
-                              className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-indigo-600 disabled:opacity-30">
+                            {/* Unlock current step */}
+                            <button onClick={() => doUnlockCurrentStep(team.id)}
+                              disabled={team.status !== "playing" || !!actionLoading}
+                              title="Skip current step"
+                              className={`rounded-lg p-1.5 transition ${helpTeamId === team.id ? "bg-red-100 text-red-600 hover:bg-red-200" : "text-gray-400 hover:bg-gray-100 hover:text-indigo-600"} disabled:opacity-30`}>
                               {actionLoading === `unlock-${team.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unlock className="h-3.5 w-3.5" />}
                             </button>
                             {/* Message */}
@@ -356,37 +360,6 @@ export default function LiveDashboard() {
         </div>
       )}
 
-      {/* ── Unlock Modal ── */}
-      {unlockModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setUnlockModal(null)}>
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">Unlock step for {unlockModal.teamName}</h3>
-              <button onClick={() => setUnlockModal(null)}><X className="h-5 w-5 text-gray-400" /></button>
-            </div>
-            <select
-              value={unlockStepId}
-              onChange={(e) => setUnlockStepId(e.target.value)}
-              className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:border-indigo-400 focus:outline-none"
-            >
-              <option value="">Select a step...</option>
-              {allSteps.map((s, i) => (
-                <option key={s.id} value={s.id}>
-                  Step {i + 1} — {s.type}{s.type === "enigme" && s.answer ? ` (${s.answer})` : ""}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={doUnlock}
-              disabled={!unlockStepId || actionLoading?.startsWith("unlock")}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
-              <Unlock className="h-4 w-4" />
-              {actionLoading?.startsWith("unlock") ? "Unlocking..." : "Unlock Step"}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

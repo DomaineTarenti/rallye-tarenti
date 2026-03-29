@@ -54,6 +54,20 @@ function JoinContent() {
       const data = json.data as Record<string, unknown>;
       setSession(data.session as never);
       setTeam(data.team as never);
+
+      // If team has finished, show their results
+      if (data.finished) {
+        const teamData = data.team as Record<string, unknown>;
+        if (teamData.character) {
+          try {
+            const char = typeof teamData.character === "string" ? JSON.parse(teamData.character) : teamData.character;
+            setTeamCharacter(char);
+          } catch { /* ignore */ }
+        }
+        router.push("/results");
+        return;
+      }
+
       setObjects(data.objects as never[]);
       setSteps(data.steps as never[]);
       setProgress(data.progress as never[]);
