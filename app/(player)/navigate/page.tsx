@@ -176,6 +176,18 @@ export default function NavigatePage() {
     } catch { /* denied */ }
   }
 
+  // On iOS, request compass permission on first touch anywhere on the page
+  useEffect(() => {
+    if (!needsCompassPermission) return;
+    function onTouch() {
+      requestCompassPermission();
+      document.removeEventListener("touchstart", onTouch);
+    }
+    document.addEventListener("touchstart", onTouch, { once: true });
+    return () => document.removeEventListener("touchstart", onTouch);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsCompassPermission]);
+
   // Calculate distance and bearing
   const distance = (userLat != null && userLng != null && targetLat != null && targetLng != null)
     ? getDistance(userLat, userLng, targetLat, targetLng)
@@ -309,9 +321,10 @@ export default function NavigatePage() {
             {needsCompassPermission && (
               <button
                 onClick={requestCompassPermission}
-                className="mb-4 rounded-xl bg-amber/20 px-4 py-2 text-sm font-medium text-amber"
+                className="mb-4 flex items-center gap-2 rounded-xl bg-amber/20 px-5 py-3 text-sm font-medium text-amber animate-pulse"
               >
-                Activer la boussole
+                <span className="text-lg">&#x1F9ED;</span>
+                Tap to activate compass
               </button>
             )}
 
