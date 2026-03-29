@@ -142,10 +142,10 @@ export async function POST(req: NextRequest) {
         .select("*")
         .eq("team_id", team_id);
 
-      return processMatch(supabase, scannedObject, team_id, scannedCode, freshProgress ?? []);
+      return processMatch(supabase, scannedObject, team_id, scannedCode, freshProgress ?? [], resolvedSessionId);
     }
 
-    return processMatch(supabase, scannedObject, team_id, scannedCode, allProgress ?? []);
+    return processMatch(supabase, scannedObject, team_id, scannedCode, allProgress ?? [], resolvedSessionId);
   } catch (err) {
     console.error("[SCAN] Uncaught error:", err);
     return json(
@@ -242,6 +242,7 @@ async function processMatch(
   team_id: string,
   scannedCode: string,
   allProgress: Array<Record<string, unknown>>,
+  resolvedSessionId: string,
 ) {
   const activeProgress = allProgress.find((p) => p.status === "active");
   const completedCount = allProgress.filter((p) => p.status === "completed").length;
@@ -284,6 +285,28 @@ async function processMatch(
   if (scannedObject.id === expectedObjectId) {
     // Direct match — valid scan
     console.log("[SCAN] VALID match for", scannedObject.name);
+
+    // If this is an epreuve, notify the assigned guardian NOW (player is physically here)
+    if (activeStep.type === "epreuve") {
+      const { data: guardian } = await supabase
+        .from("staff_members")
+        .select("id, name")
+        .eq("assigned_step_id", activeStep.id)
+        .single();
+
+      if (guardian) {
+        const { data: teamInfo } = await supabase.from("teams").select("name").eq("id", team_id).single();
+        await supabase.from("team_messages").insert({
+          session_id: resolvedSessionId,
+          team_id,
+          message: `${teamInfo?.name ?? "A team"} has arrived for the challenge!`,
+          type: "epreuve_scan",
+          staff_id: guardian.id,
+        });
+        console.log("[SCAN] Notified guardian", guardian.name, "— team scanned epreuve object");
+      }
+    }
+
     const result: ScanResult = { valid: true, step: activeStep, object: scannedObject };
     setCachedScan(scannedCode, team_id, result);
     return json(result);

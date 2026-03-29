@@ -38,11 +38,12 @@ export default function CelebratePage() {
   const [collecting, setCollecting] = useState(false);
   const particles = useParticles();
 
-  // Team-relative chapter from completed count (including current step just completed)
+  // The chapter we just completed = completedCount (if store is fresh) or at least currentStepIndex + 1
   const completedCount = progress.filter((p) => p.status === "completed").length;
-  const chapterNumber = completedCount;
+  const currentStepIndex = usePlayerStore((s) => s.currentStepIndex);
+  const chapterNumber = Math.max(completedCount, currentStepIndex + 1);
   const totalChapters = team?.object_order?.length ?? steps.length;
-  const isLastStep = completedCount >= totalChapters;
+  const isLastStep = chapterNumber >= totalChapters;
   const isStaff = currentStep?.type === "epreuve";
   const teamColor = teamCharacter?.color ?? "#7F77DD";
   const rank = getRank(score);

@@ -60,26 +60,6 @@ export async function activateNextStep(
       .eq("id", nextProgress.id);
 
     // If the next step is an epreuve, notify the assigned guardian
-    const step = stepInfo.get(nextProgress.step_id);
-    if (step && step.type === "epreuve" && team?.session_id) {
-      const { data: guardian } = await supabase
-        .from("staff_members")
-        .select("id, name")
-        .eq("assigned_step_id", nextProgress.step_id)
-        .single();
-
-      if (guardian) {
-        await supabase.from("team_messages").insert({
-          session_id: team.session_id,
-          team_id: teamId,
-          message: `${team.name} is ready for the challenge!`,
-          type: "epreuve_request",
-          staff_id: guardian.id,
-        });
-        console.log(`[PROGRESS] Notified guardian ${guardian.name} for team ${team.name}`);
-      }
-    }
-
     return true;
   }
 
