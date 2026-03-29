@@ -59,6 +59,8 @@ export default function NavigatePage() {
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
   const [heading, setHeading] = useState(0);
+  const [compassActive, setCompassActive] = useState(false);
+  const [needsCompassPermission, setNeedsCompassPermission] = useState(false);
   const [gpsError, setGpsError] = useState(false);
   const [gpsDenied, setGpsDenied] = useState(false);
   const [showPhoto, setShowPhoto] = useState(false);
@@ -116,27 +118,52 @@ export default function NavigatePage() {
     };
   }, []);
 
-  // Listen to device orientation for compass (with iOS permission request)
+  // Compass orientation listener
   useEffect(() => {
     function handleOrientation(e: DeviceOrientationEvent) {
-      if (e.alpha != null) setHeading(e.alpha);
-    }
-
-    async function startOrientation() {
-      // iOS 13+ requires explicit permission
-      const doe = DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };
-      if (typeof doe.requestPermission === "function") {
-        try {
-          const perm = await doe.requestPermission();
-          if (perm !== "granted") return;
-        } catch { return; }
+      // iOS provides webkitCompassHeading (true north), Android uses alpha
+      const h = (e as unknown as { webkitCompassHeading?: number }).webkitCompassHeading;
+      if (h != null) {
+        setHeading(h);
+      } else if (e.alpha != null) {
+        setHeading(e.alpha);
       }
-      window.addEventListener("deviceorientation", handleOrientation);
+      setCompassActive(true);
     }
 
-    startOrientation();
-    return () => window.removeEventListener("deviceorientation", handleOrientation);
+    // Check if iOS requires permission (must be triggered by user gesture)
+    const doe = DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };
+    if (typeof doe.requestPermission === "function") {
+      setNeedsCompassPermission(true);
+    } else {
+      // Android / desktop — just listen
+      window.addEventListener("deviceorientation", handleOrientation);
+      // Check if we get events after 2s
+      const timeout = setTimeout(() => {
+        if (!compassActive) setCompassActive(false);
+      }, 2000);
+      return () => {
+        clearTimeout(timeout);
+        window.removeEventListener("deviceorientation", handleOrientation);
+      };
+    }
   }, []);
+
+  async function requestCompassPermission() {
+    const doe = DeviceOrientationEvent as unknown as { requestPermission: () => Promise<string> };
+    try {
+      const perm = await doe.requestPermission();
+      if (perm === "granted") {
+        setNeedsCompassPermission(false);
+        window.addEventListener("deviceorientation", (e) => {
+          const h = (e as unknown as { webkitCompassHeading?: number }).webkitCompassHeading;
+          if (h != null) setHeading(h);
+          else if (e.alpha != null) setHeading(e.alpha);
+          setCompassActive(true);
+        });
+      }
+    } catch { /* denied */ }
+  }
 
   // Calculate distance and bearing
   const distance = (userLat != null && userLng != null && targetLat != null && targetLng != null)
@@ -265,6 +292,16 @@ export default function NavigatePage() {
               )}
             </div>
 
+            {/* Compass permission button for iOS */}
+            {needsCompassPermission && (
+              <button
+                onClick={requestCompassPermission}
+                className="mb-4 rounded-xl bg-amber/20 px-4 py-2 text-sm font-medium text-amber"
+              >
+                Activer la boussole
+              </button>
+            )}
+
             {/* Distance */}
             <p className="mb-1 text-4xl font-black" style={{ color: distColor }}>
               {distance != null ? formatDistance(distance) : "..."}
@@ -274,6 +311,8 @@ export default function NavigatePage() {
               <p className="mb-6 text-sm text-green-400 font-medium">You are very close!</p>
             ) : distance != null && distance < 20 ? (
               <p className="mb-6 text-sm text-amber font-medium">Getting warmer...</p>
+            ) : !compassActive ? (
+              <p className="mb-6 text-sm text-gray-500">Distance only — compass calibrating...</p>
             ) : (
               <p className="mb-6 text-sm text-gray-500">Follow the arrow</p>
             )}
