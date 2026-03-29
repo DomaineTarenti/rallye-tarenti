@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Navigation, QrCode, MapPin, AlertTriangle, Image } from "lucide-react";
+import { Navigation, QrCode, MapPin, AlertTriangle, Image, MessageCircle, Send, X, AlertOctagon } from "lucide-react";
 import { Button, Card } from "@/components/shared";
+import { supabase } from "@/lib/supabase";
 import { usePlayerStore } from "@/lib/store";
 import { getDistance, getBearing, formatDistance, getDistanceColor } from "@/lib/geo";
 import type { ApiResponse, Step, TeamProgress } from "@/lib/types";
@@ -56,6 +57,66 @@ export default function NavigatePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [team?.id, session?.id]);
 
+  // Load chat messages + subscribe to new ones
+  useEffect(() => {
+    if (!team) return;
+    // Load existing messages
+    supabase
+      .from("team_messages")
+      .select("id, message, type, created_at")
+      .eq("team_id", team.id)
+      .order("created_at", { ascending: true })
+      .then(({ data }) => { if (data) setChatMessages(data); });
+
+    // Subscribe to new messages
+    const ch = supabase
+      .channel(`chat-${team.id}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "team_messages",
+        filter: `team_id=eq.${team.id}`,
+      }, (payload) => {
+        const msg = payload.new as { id: string; message: string; type: string; created_at: string };
+        setChatMessages((prev) => [...prev, msg]);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(ch); };
+  }, [team?.id]);
+
+  async function sendHelp() {
+    if (!team || !session || helpSent) return;
+    setHelpSent(true);
+    await fetch("/api/admin/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        team_id: team.id,
+        session_id: session.id,
+        message: `🆘 ${team.name} needs help! (${objectName})`,
+        type: "help_request",
+      }),
+    });
+  }
+
+  async function sendChatMessage() {
+    if (!team || !session || !chatInput.trim()) return;
+    setSendingChat(true);
+    await fetch("/api/admin/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        team_id: team.id,
+        session_id: session.id,
+        message: chatInput.trim(),
+        type: "player_message",
+      }),
+    });
+    setChatInput("");
+    setSendingChat(false);
+  }
+
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
   const [heading, setHeading] = useState(0);
@@ -66,6 +127,11 @@ export default function NavigatePage() {
   const [gpsError, setGpsError] = useState(false);
   const [gpsDenied, setGpsDenied] = useState(false);
   const [showPhoto, setShowPhoto] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Array<{ id: string; message: string; type: string; created_at: string }>>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [sendingChat, setSendingChat] = useState(false);
+  const [helpSent, setHelpSent] = useState(false);
   const watchRef = useRef<number | null>(null);
 
   // Derive chapter from completed count
@@ -386,15 +452,63 @@ export default function NavigatePage() {
         )}
       </div>
 
+      {/* Chat panel */}
+      {showChat && (
+        <div className="border-t border-white/10 bg-surface px-4 py-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Game Master Chat</span>
+            <button onClick={() => setShowChat(false)}><X className="h-4 w-4 text-gray-500" /></button>
+          </div>
+          <div className="mb-2 max-h-40 overflow-y-auto space-y-1.5">
+            {chatMessages.filter((m) => m.type === "message" || m.type === "player_message").length === 0 && (
+              <p className="text-xs text-gray-600 italic">No messages yet</p>
+            )}
+            {chatMessages.filter((m) => m.type === "message" || m.type === "player_message").map((msg) => (
+              <div key={msg.id} className={`rounded-lg px-3 py-1.5 text-xs ${msg.type === "player_message" ? "bg-primary/20 text-primary ml-8" : "bg-white/10 text-gray-300 mr-8"}`}>
+                {msg.message}
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              id="chat-input"
+              name="chat-input"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && sendChatMessage()}
+              placeholder="Message the Game Master..."
+              autoComplete="off"
+              className="flex-1 rounded-lg border border-white/10 bg-deep px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-primary focus:outline-none"
+            />
+            <button onClick={sendChatMessage} disabled={!chatInput.trim() || sendingChat} className="rounded-lg bg-primary px-3 py-2 text-white disabled:opacity-40">
+              <Send className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Bottom actions */}
-      <div className="px-4 pb-6 pt-2">
+      <div className="flex gap-2 px-4 pb-6 pt-2">
+        <button
+          onClick={() => { sendHelp(); setShowChat(true); }}
+          className={`flex items-center gap-1.5 rounded-xl px-4 py-3 text-sm font-medium transition ${helpSent ? "bg-red-500/20 text-red-400" : "bg-surface text-gray-400 hover:text-red-400"}`}
+        >
+          <AlertOctagon className="h-4 w-4" />
+          {helpSent ? "Help sent" : "Help"}
+        </button>
+        <button
+          onClick={() => setShowChat(!showChat)}
+          className="flex items-center gap-1.5 rounded-xl bg-surface px-4 py-3 text-sm text-gray-400 hover:text-primary"
+        >
+          <MessageCircle className="h-4 w-4" />
+        </button>
         <Button
           onClick={() => router.push("/scan")}
           size="lg"
-          className={`w-full ${isClose ? "animate-pulse" : ""}`}
+          className={`flex-1 ${isClose ? "animate-pulse" : ""}`}
         >
           <QrCode className="mr-2 h-5 w-5" />
-          {isClose ? "I found it — Scan!" : "Scan the artifact"}
+          {isClose ? "Scan!" : "Scan"}
         </Button>
       </div>
     </main>

@@ -170,7 +170,7 @@ export default function ScanPage() {
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3">
         <button
-          onClick={() => router.push("/play")}
+          onClick={() => router.push("/navigate")}
           className="flex h-9 w-9 items-center justify-center rounded-xl bg-surface text-gray-400"
         >
           <ChevronLeft className="h-5 w-5" />
