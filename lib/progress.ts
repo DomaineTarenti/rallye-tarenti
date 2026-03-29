@@ -1,4 +1,5 @@
 import { createServerClient } from "@/lib/supabase";
+import { calculateScore, getRank } from "@/lib/scoring";
 
 /**
  * Activate the next locked step for a team, respecting the team's object_order.
@@ -63,11 +64,46 @@ export async function activateNextStep(
     return true;
   }
 
-  // No more locked steps — quest complete
+  // No more locked steps — quest complete, calculate final score
+  const { data: fullTeam } = await supabase
+    .from("teams")
+    .select("started_at, created_at")
+    .eq("id", teamId)
+    .single();
+
+  const startTime = fullTeam?.started_at
+    ? new Date(fullTeam.started_at).getTime()
+    : fullTeam?.created_at
+    ? new Date(fullTeam.created_at).getTime()
+    : Date.now() - 3600000;
+  const endTime = Date.now();
+
+  const { data: hintProgress } = await supabase
+    .from("team_progress")
+    .select("hint_types")
+    .eq("team_id", teamId);
+
+  const allHints = (hintProgress ?? [])
+    .flatMap((p) => (p.hint_types as string[]) ?? [])
+    .map((type) => ({ type }));
+
+  const finalScore = calculateScore(startTime, endTime, allHints);
+  const { key: rank, label: rankLabel } = getRank(finalScore);
+  const completionTime = Math.floor((endTime - startTime) / 1000);
+
   await supabase
     .from("teams")
-    .update({ status: "finished", locked: true })
+    .update({
+      status: "finished",
+      locked: true,
+      final_score: finalScore,
+      rank,
+      rank_label: rankLabel,
+      completion_time: completionTime,
+    })
     .eq("id", teamId);
+
+  console.log(`[PROGRESS] Team ${teamId} finished: score=${finalScore}, rank=${rankLabel}, time=${completionTime}s`);
 
   return false;
 }
