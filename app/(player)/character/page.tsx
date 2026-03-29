@@ -48,7 +48,9 @@ export default function CharacterPage() {
   // If team already exists with an access_code (pre-created), use update flow
   const isPrecreated = !!existingTeam?.is_precreated && !!existingTeam?.access_code;
 
-  const [teamName, setTeamName] = useState(existingTeam?.name ?? "");
+  const defaultName = existingTeam?.name ?? "";
+  const isDefaultName = /^[ÉE]quipe \d+$/i.test(defaultName);
+  const [teamName, setTeamName] = useState(isDefaultName ? "" : defaultName);
   const [selectedAnimal, setSelectedAnimal] = useState<(typeof ANIMALS)[number] | null>(null);
   const [selectedColor, setSelectedColor] = useState<(typeof ASTRAL_HUES)[number] | null>(null);
   const [warCry, setWarCry] = useState("");
@@ -66,7 +68,7 @@ export default function CharacterPage() {
     return null;
   }
 
-  const canSubmit = teamName.trim().length >= 2 && selectedAnimal && selectedColor;
+  const canSubmit = (teamName.trim().length >= 2 || isDefaultName) && selectedAnimal && selectedColor;
 
   function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -104,7 +106,7 @@ export default function CharacterPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             access_code: existingTeam.access_code,
-            name: teamName.trim(),
+            name: teamName.trim() || defaultName || "Team",
             character: JSON.stringify(character),
           }),
         });
@@ -132,7 +134,7 @@ export default function CharacterPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             session_id: sessionId,
-            name: teamName.trim(),
+            name: teamName.trim() || defaultName || "Team",
             character: JSON.stringify(character),
           }),
         });
