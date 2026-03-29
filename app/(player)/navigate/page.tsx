@@ -60,6 +60,7 @@ export default function NavigatePage() {
   const [userLng, setUserLng] = useState<number | null>(null);
   const [heading, setHeading] = useState(0);
   const [gpsError, setGpsError] = useState(false);
+  const [gpsDenied, setGpsDenied] = useState(false);
   const [showPhoto, setShowPhoto] = useState(false);
   const watchRef = useRef<number | null>(null);
 
@@ -84,10 +85,10 @@ export default function NavigatePage() {
   const objectDesc = resolvedObject?.description ?? "";
   const teamColor = teamCharacter?.color ?? "#7F77DD";
 
-  // Watch GPS position
+  // Watch GPS position — mandatory
   useEffect(() => {
-    if (!hasGPS || typeof navigator === "undefined" || !navigator.geolocation) {
-      setGpsError(true);
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setGpsDenied(true);
       return;
     }
 
@@ -96,8 +97,15 @@ export default function NavigatePage() {
         setUserLat(pos.coords.latitude);
         setUserLng(pos.coords.longitude);
         setGpsError(false);
+        setGpsDenied(false);
       },
-      () => setGpsError(true),
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) {
+          setGpsDenied(true);
+        } else {
+          setGpsError(true);
+        }
+      },
       { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
     );
 
@@ -106,7 +114,7 @@ export default function NavigatePage() {
         navigator.geolocation.clearWatch(watchRef.current);
       }
     };
-  }, [hasGPS]);
+  }, []);
 
   // Listen to device orientation for compass (with iOS permission request)
   useEffect(() => {
@@ -162,8 +170,53 @@ export default function NavigatePage() {
     );
   }
 
+  // GPS denied → blocking screen with instructions
+  if (gpsDenied) {
+    const isIOS = typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent);
+    return (
+      <main style={{ minHeight: "100vh", background: "#1a1a2e", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 32, textAlign: "center" }}>
+        <div style={{ fontSize: 64, marginBottom: 24 }}>&#x1F9ED;</div>
+        <h2 style={{ color: "#EF9F27", fontSize: 20, marginBottom: 12 }}>Localisation requise</h2>
+        <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 15, marginBottom: 32 }}>
+          La boussole a besoin de votre position pour vous guider vers les artefacts.
+        </p>
+        <div style={{ background: "rgba(255,255,255,0.08)", borderRadius: 12, padding: 20, width: "100%", marginBottom: 24, textAlign: "left" }}>
+          {isIOS ? (
+            <>
+              <p style={{ color: "#EF9F27", fontSize: 13, marginBottom: 8 }}>Conseil : ouvrez dans Safari pour une meilleure exp&eacute;rience</p>
+              <p style={{ color: "#7F77DD", fontWeight: 500, marginBottom: 12 }}>Sur iPhone :</p>
+              <p style={{ color: "white", fontSize: 14, lineHeight: 1.8, whiteSpace: "pre-line" }}>
+                {"1. Fermez cette page\n2. Allez dans Réglages\n3. Faites défiler jusqu'à Safari\n4. Localisation → Lors de l'utilisation\n5. Revenez sur cette page"}
+              </p>
+            </>
+          ) : (
+            <>
+              <p style={{ color: "#7F77DD", fontWeight: 500, marginBottom: 12 }}>Sur Android :</p>
+              <p style={{ color: "white", fontSize: 14, lineHeight: 1.8, whiteSpace: "pre-line" }}>
+                {"1. Appuyez sur l'icône 🔒 dans la barre d'adresse\n2. Autorisations → Position\n3. Sélectionnez « Autoriser »\n4. Rechargez la page"}
+              </p>
+            </>
+          )}
+        </div>
+        <button onClick={() => window.location.reload()} style={{ background: "#7F77DD", color: "white", border: "none", borderRadius: 12, padding: "14px 32px", fontSize: 16, fontWeight: 500, cursor: "pointer", width: "100%" }}>
+          J&apos;ai activ&eacute; la localisation — R&eacute;essayer
+        </button>
+        {isIOS && (
+          <button
+            onClick={() => { navigator.clipboard?.writeText(window.location.href); }}
+            style={{ background: "transparent", color: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 12, padding: "10px 24px", fontSize: 13, cursor: "pointer", width: "100%", marginTop: 12 }}
+          >
+            Copier le lien pour Safari
+          </button>
+        )}
+        <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 12, marginTop: 20 }}>
+          La localisation est indispensable pour jouer
+        </p>
+      </main>
+    );
+  }
+
   const isClose = distance != null && distance < 10;
-  const canScan = !hasGPS || isClose || userLat == null;
 
   return (
     <main className="flex min-h-[100dvh] flex-col bg-deep text-white">
@@ -175,7 +228,7 @@ export default function NavigatePage() {
 
       <div className="flex flex-1 flex-col items-center justify-center px-6">
         {/* GPS acquiring */}
-        {hasGPS && !gpsError && userLat == null && (
+        {userLat == null && (
           <div className="mb-6 flex flex-col items-center">
             <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-surface">
               <Navigation className="h-10 w-10 animate-pulse text-primary" />
@@ -185,7 +238,7 @@ export default function NavigatePage() {
         )}
 
         {/* GPS available — show compass */}
-        {hasGPS && !gpsError && userLat != null ? (
+        {hasGPS && userLat != null ? (
           <>
             {/* Compass arrow */}
             <div className="relative mb-6">
@@ -227,10 +280,13 @@ export default function NavigatePage() {
           </>
         ) : (
           <>
-            {/* Exploration mode — no GPS coordinates, use clues */}
-            <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-primary/15">
-              <Navigation className="h-10 w-10 text-primary" />
-            </div>
+            {/* Object has no GPS coordinates — show distance from user if available */}
+            {userLat != null && (
+              <div className="mb-4 flex flex-col items-center">
+                <Navigation className="h-10 w-10 text-primary mb-2" />
+                <p className="text-sm text-gray-400">GPS active — follow the clues</p>
+              </div>
+            )}
 
             <h2 className="mb-2 text-xl font-bold text-center">{objectName}</h2>
             {objectDesc && <p className="mb-4 text-center text-sm text-gray-400">{objectDesc}</p>}
@@ -270,7 +326,7 @@ export default function NavigatePage() {
         <Button
           onClick={() => router.push("/scan")}
           size="lg"
-          className={`w-full ${canScan ? "animate-pulse" : ""}`}
+          className={`w-full ${isClose ? "animate-pulse" : ""}`}
         >
           <QrCode className="mr-2 h-5 w-5" />
           {isClose ? "I found it — Scan!" : "Scan the artifact"}
