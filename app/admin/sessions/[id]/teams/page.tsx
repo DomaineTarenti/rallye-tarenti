@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { Users, RefreshCw } from "lucide-react";
+import { Users, RefreshCw, RotateCcw, Loader2 } from "lucide-react";
 import { Loader } from "@/components/shared";
 import type { ApiResponse, Session } from "@/lib/types";
 
@@ -29,6 +29,7 @@ export default function AdminTeamsPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [teams, setTeams] = useState<TeamData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [resetting, setResetting] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -52,6 +53,18 @@ export default function AdminTeamsPage() {
   }, [sessionId]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  async function resetTeam(teamId: string, teamName: string) {
+    if (!confirm(`Remettre "${teamName}" à zéro ?\n\nCela supprimera toute la progression, les messages et les photos de cette équipe.`)) return;
+    setResetting(teamId);
+    await fetch("/api/admin/reset-team", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team_id: teamId }),
+    });
+    await loadData();
+    setResetting(null);
+  }
 
   if (loading) {
     return <div className="flex h-96 items-center justify-center"><Loader text="Loading teams..." /></div>;
@@ -97,9 +110,24 @@ export default function AdminTeamsPage() {
                         {team.access_code}
                       </p>
                     )}
-                    <p className="text-xs text-gray-400">
-                      {team.object_order?.length ?? 0} steps · Order randomized
-                    </p>
+                    <div className="flex items-center justify-between mt-2">
+                      <p className="text-xs text-gray-400">
+                        {team.status === "waiting" ? "En attente" : team.status === "playing" ? "En cours" : "Terminé"}
+                      </p>
+                      {team.status !== "waiting" && (
+                        <button
+                          onClick={() => resetTeam(team.id, team.name)}
+                          disabled={resetting === team.id}
+                          title="Remettre à zéro"
+                          className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-red-500 hover:bg-red-50 disabled:opacity-40 transition"
+                        >
+                          {resetting === team.id
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <RotateCcw className="h-3 w-3" />}
+                          Reset
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
