@@ -112,8 +112,23 @@ export default function LiveDashboard() {
           // Sound notification
           try { new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1saWBnbXV3dnZxbW5ydHRxbnF0d3d0cG1vc3Z3dHBtb3N2d3RxbnF1eHd0cXF0eHl3dHJ0eHp5d3V1eXt6eHZ2eXt7eXd2eHp7end3eHp7e3p4eHp8fHt5eXt8fXt6ent9fn18e3x+f359fH1/gH9+fX6AgYB/fn+BgoGAf4CBgoKBgIGCg4OCgYKDhIOCgoOEhYSDg4SFhoWEhIWGh4aFhYaHiIeGhoeIiYiHh4iJioqJiImKi4uKiYqLjIyLiouMjY2Mi4yNjo6NjI2Oj4+OjY6PkJCPjo+QkZGQj5CRkpKRkJGSk5OSkZKTlJSTkpOU").play().catch(() => {}); } catch { /* no audio */ }
           // Change tab title
-          document.title = "\u{1F198} The Quest — Help needed!";
-          setTimeout(() => { document.title = "The Quest Admin"; setHelpAlert(null); setHelpTeamId(null); }, 15000);
+          document.title = "\u{1F198} Rallye Tarenti — Help needed!";
+          setTimeout(() => { document.title = "Rallye Tarenti Admin"; setHelpAlert(null); setHelpTeamId(null); }, 15000);
+        }
+        // Son discret pour les messages normaux des joueurs
+        if (msg.type === "player_message") {
+          try {
+            const ctx = new AudioContext();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.value = 880;
+            gain.gain.setValueAtTime(0.15, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.3);
+          } catch { /* no audio */ }
         }
         // Marquer l'équipe comme ayant des messages non lus si le chat n'est pas ouvert pour elle
         if ((msg.type === "player_message" || msg.type === "help_request") && msg.team_id) {

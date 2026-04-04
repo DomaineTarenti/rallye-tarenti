@@ -76,7 +76,7 @@ export default function CameraPage() {
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
 
-    const W = 1080, H = 1440; // portrait 3:4
+    const W = 900, H = 1200; // portrait 3:4
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext("2d");
@@ -112,7 +112,7 @@ export default function CameraPage() {
         setPhase("preview");
       },
       "image/jpeg",
-      0.88
+      0.82
     );
   }
 

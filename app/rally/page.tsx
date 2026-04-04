@@ -67,6 +67,21 @@ export default function RallyPage() {
   const [chatInput, setChatInput] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
   const [helpSent, setHelpSent] = useState(false);
+
+  // Timer
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const i = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(i);
+  }, []);
+  const elapsedSeconds = team?.started_at
+    ? Math.floor((Date.now() - new Date(team.started_at).getTime()) / 1000)
+    : 0;
+  const elapsedDisplay = team?.started_at
+    ? `${Math.floor(elapsedSeconds / 60)}:${String(elapsedSeconds % 60).padStart(2, "0")}`
+    : null;
+  void tick; // used to trigger re-render
+
   const [unreadFromGM, setUnreadFromGM] = useState(false);
   const showChatRef = useRef(false);
   useEffect(() => { showChatRef.current = showChat; }, [showChat]);
@@ -331,21 +346,29 @@ export default function RallyPage() {
             <span>{objectName}</span>
           </h1>
         </div>
-        {/* Pastilles de progression */}
-        <div className="flex gap-1">
-          {steps.map((_, i) => {
-            const prog = progress[i];
-            const done = prog?.status === "completed" || prog?.status === "skipped";
-            const active = prog?.status === "active";
-            return (
-              <div
-                key={i}
-                className={`h-2 w-2 rounded-full transition-all ${
-                  done ? "bg-primary" : active ? "bg-amber-400 animate-pulse" : "bg-white/20"
-                }`}
-              />
-            );
-          })}
+        <div className="flex items-center gap-3">
+          {elapsedDisplay && (
+            <div className="text-right">
+              <p className="text-[10px] text-gray-600 uppercase tracking-wider">Temps</p>
+              <p className="font-mono text-sm font-bold text-gray-300">{elapsedDisplay}</p>
+            </div>
+          )}
+          {/* Pastilles de progression */}
+          <div className="flex gap-1">
+            {steps.map((_, i) => {
+              const prog = progress[i];
+              const done = prog?.status === "completed" || prog?.status === "skipped";
+              const active = prog?.status === "active";
+              return (
+                <div
+                  key={i}
+                  className={`h-2 w-2 rounded-full transition-all ${
+                    done ? "bg-primary" : active ? "bg-amber-400 animate-pulse" : "bg-white/20"
+                  }`}
+                />
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -483,13 +506,17 @@ export default function RallyPage() {
           className={`flex-1 rounded-xl py-3 text-base font-bold text-white transition-all active:scale-95 ${
             isInGeofence
               ? "bg-primary shadow-lg shadow-primary/30"
+              : distance != null && distance < 50
+              ? "bg-amber-500/30 text-amber-300 cursor-not-allowed"
               : "bg-surface text-gray-500 cursor-not-allowed"
           }`}
         >
           {isInGeofence
             ? `Nous y sommes ! ${objectEmoji}`
+            : distance != null && distance < 50
+            ? `Approche... encore ${formatDistance(distance)}`
             : distance != null
-            ? `Encore ${formatDistance(distance)}...`
+            ? `Encore ${formatDistance(distance)}`
             : "Trouver l'animal"}
         </button>
       </div>

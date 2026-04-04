@@ -30,6 +30,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Lister et supprimer les fichiers Storage du dossier team_id/
+  const { data: storageFiles } = await supabase.storage
+    .from("team-photos")
+    .list(team_id, { limit: 100 });
+  if (storageFiles && storageFiles.length > 0) {
+    const paths = storageFiles.map((f) => `${team_id}/${f.name}`);
+    await supabase.storage.from("team-photos").remove(paths);
+  }
+
   // Supprimer progression, messages, photos (en parallèle)
   await Promise.all([
     supabase.from("team_progress").delete().eq("team_id", team_id),

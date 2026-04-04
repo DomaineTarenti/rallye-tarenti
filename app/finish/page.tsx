@@ -95,11 +95,20 @@ export default function FinishPage() {
         </div>
 
         {/* Galerie photos */}
-        {loaded && photos.length > 0 && (
-          <div className="w-full max-w-sm mb-8">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">
-              Vos photos du rallye
-            </p>
+        <div className="w-full max-w-sm mb-8">
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">
+            Vos photos du rallye
+          </p>
+          {!loaded ? (
+            // Skeleton loader
+            <div className="grid grid-cols-3 gap-2">
+              {Array.from({ length: 9 }).map((_, i) => (
+                <div key={i} className="relative aspect-square rounded-xl overflow-hidden bg-surface animate-pulse">
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent" />
+                </div>
+              ))}
+            </div>
+          ) : photos.length > 0 ? (
             <div className="grid grid-cols-3 gap-2">
               {photos.map((photo) => {
                 const obj = objects.find((o) => o.id === photo.object_id);
@@ -110,6 +119,7 @@ export default function FinishPage() {
                       src={photo.storage_url}
                       alt={obj?.name ?? "Photo"}
                       className="h-full w-full object-cover"
+                      loading="lazy"
                     />
                     {obj && (
                       <div className="absolute bottom-0 left-0 right-0 bg-black/50 py-1 text-center">
@@ -120,8 +130,10 @@ export default function FinishPage() {
                 );
               })}
             </div>
-          </div>
-        )}
+          ) : (
+            <p className="text-xs text-gray-600 text-center italic">Aucune photo pour l&apos;instant.</p>
+          )}
+        </div>
 
         {/* Récap animaux rencontrés */}
         <div className="w-full max-w-sm mb-6">

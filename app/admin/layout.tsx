@@ -32,6 +32,7 @@ export default function AdminLayout({
     { label: "Configure", href: `/admin/sessions/${sessionId}` },
     { label: "Équipes", href: `/admin/sessions/${sessionId}/teams` },
     { label: "Live", href: `/admin/sessions/${sessionId}/live` },
+    { label: "GPS", href: `/admin/sessions/${sessionId}/gps` },
     { label: "Photos", href: `/admin/sessions/${sessionId}/photos` },
     { label: "Résultats", href: `/admin/sessions/${sessionId}/results` },
   ] : null;

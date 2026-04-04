@@ -11,6 +11,7 @@ const ANIMALS = ["🐐", "🐄", "🫏", "🐷", "🌿", "🐔", "🐇"];
 export default function OnboardingPage() {
   const router = useRouter();
   const team = usePlayerStore((s) => s.team);
+  const session = usePlayerStore((s) => s.session);
   const hasHydrated = usePlayerStore((s) => s._hasHydrated);
   const setTeam = usePlayerStore((s) => s.setTeam);
 
@@ -81,8 +82,9 @@ export default function OnboardingPage() {
         </h1>
 
         <p className="mb-8 max-w-sm text-base text-gray-300 leading-relaxed">
-          Le Domaine Tarenti vous ouvre ses portes pour une aventure unique au cœur de la nature.
-          Sept animaux vous attendent — saurez-vous les retrouver tous ?
+          {team?.session_id && session?.description
+            ? session.description
+            : "Le Domaine Tarenti vous ouvre ses portes pour une aventure unique au cœur de la nature. Ses animaux vous attendent — saurez-vous les retrouver tous ?"}
         </p>
 
         <button

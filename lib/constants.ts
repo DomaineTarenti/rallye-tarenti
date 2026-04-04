@@ -65,4 +65,4 @@ export const TARENTI_ACCUEIL = {
 };
 
 // Rayon de geofencing pour déclencher l'arrivée (en mètres)
-export const GEOFENCE_RADIUS_M = 15;
+export const GEOFENCE_RADIUS_M = 25;
