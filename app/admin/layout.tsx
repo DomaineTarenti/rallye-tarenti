@@ -30,10 +30,10 @@ export default function AdminLayout({
 
   const sessionSubnav = sessionId && !isNewSession ? [
     { label: "Configure", href: `/admin/sessions/${sessionId}` },
-    { label: "Teams", href: `/admin/sessions/${sessionId}/teams` },
+    { label: "Équipes", href: `/admin/sessions/${sessionId}/teams` },
     { label: "Live", href: `/admin/sessions/${sessionId}/live` },
-    { label: "Staff", href: `/admin/sessions/${sessionId}/staff` },
-    { label: "Results", href: `/admin/sessions/${sessionId}/results` },
+    { label: "Photos", href: `/admin/sessions/${sessionId}/photos` },
+    { label: "Résultats", href: `/admin/sessions/${sessionId}/results` },
   ] : null;
 
   function NavContent({ onNav }: { onNav?: () => void }) {
@@ -81,7 +81,7 @@ export default function AdminLayout({
       <aside className="hidden w-60 shrink-0 border-r border-gray-200 bg-white lg:block">
         <div className="flex h-14 items-center gap-2 border-b border-gray-200 px-5">
           <Compass className="h-5 w-5 text-indigo-600" />
-          <span className="text-sm font-bold text-gray-900">The Quest</span>
+          <span className="text-sm font-bold text-gray-900">Rallye Tarenti</span>
           <span className="ml-auto rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600">ADMIN</span>
         </div>
         <nav className="space-y-0.5 p-3">
@@ -94,7 +94,7 @@ export default function AdminLayout({
         <div className="fixed inset-0 z-50 bg-black/40 lg:hidden" onClick={() => setSidebarOpen(false)}>
           <aside className="h-full w-64 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex h-14 items-center justify-between border-b border-gray-200 px-5">
-              <span className="text-sm font-bold">The Quest Admin</span>
+              <span className="text-sm font-bold">Rallye Tarenti Admin</span>
               <button onClick={() => setSidebarOpen(false)}><X className="h-5 w-5 text-gray-400" /></button>
             </div>
             <nav className="space-y-0.5 p-3">
@@ -108,7 +108,7 @@ export default function AdminLayout({
       <div className="flex flex-1 flex-col">
         <header className="flex h-14 items-center gap-3 border-b border-gray-200 bg-white px-4 lg:hidden">
           <button onClick={() => setSidebarOpen(true)}><Menu className="h-5 w-5 text-gray-600" /></button>
-          <span className="text-sm font-bold">The Quest Admin</span>
+          <span className="text-sm font-bold">Rallye Tarenti Admin</span>
         </header>
         <main className="flex-1">{children}</main>
       </div>

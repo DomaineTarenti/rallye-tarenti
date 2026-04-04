@@ -72,30 +72,45 @@ export async function POST(req: NextRequest) {
   return NextResponse.json<ApiResponse>({ data: photo, error: null }, { status: 201 });
 }
 
-// GET /api/photo?team_id=xxx — récupérer les photos d'une équipe
+// GET /api/photo?team_id=xxx  — photos d'une équipe
+// GET /api/photo?session_id=xxx — toutes les photos d'une session (admin)
 export async function GET(req: NextRequest) {
   const teamId = req.nextUrl.searchParams.get("team_id");
+  const sessionId = req.nextUrl.searchParams.get("session_id");
+  const supabase = createServerClient();
+
+  if (sessionId) {
+    const { data: photos, error } = await supabase
+      .from("photos")
+      .select(`
+        id, storage_url, created_at, team_id,
+        teams!inner(name, session_id),
+        objects(name, emoji, "order")
+      `)
+      .eq("teams.session_id", sessionId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      return NextResponse.json<ApiResponse>({ data: null, error: error.message }, { status: 500 });
+    }
+    return NextResponse.json<ApiResponse>({ data: photos ?? [], error: null });
+  }
 
   if (!teamId) {
     return NextResponse.json<ApiResponse>(
-      { data: null, error: "team_id requis" },
+      { data: null, error: "team_id ou session_id requis" },
       { status: 400 }
     );
   }
 
-  const supabase = createServerClient();
-
   const { data: photos, error } = await supabase
     .from("photos")
-    .select("*")
+    .select("*, objects(name, emoji, \"order\")")
     .eq("team_id", teamId)
     .order("created_at", { ascending: true });
 
   if (error) {
-    return NextResponse.json<ApiResponse>(
-      { data: null, error: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json<ApiResponse>({ data: null, error: error.message }, { status: 500 });
   }
 
   return NextResponse.json<ApiResponse>({ data: photos ?? [], error: null });
