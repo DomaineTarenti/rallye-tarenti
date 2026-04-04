@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { usePlayerStore } from "@/lib/store";
 import { Loader } from "@/components/shared";
@@ -12,14 +12,16 @@ function HomeContent() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const params = useSearchParams();
+  // Empêche l'effet de redirection de court-circuiter un join en cours
+  const joiningRef = useRef(false);
 
   const storedTeam = usePlayerStore((s) => s.team);
   const storedSession = usePlayerStore((s) => s.session);
   const hasHydrated = usePlayerStore((s) => s._hasHydrated);
 
-  // Si une équipe est déjà en cours, reprendre directement
+  // Si une équipe est déjà en cours (rechargement page), reprendre directement
   useEffect(() => {
-    if (!hasHydrated) return;
+    if (!hasHydrated || joiningRef.current) return;
     if (storedTeam && storedSession && storedTeam.status === "playing") {
       router.replace("/rally");
     }
@@ -55,6 +57,7 @@ function HomeContent() {
 
       const data = json.data as Record<string, unknown>;
       const store = usePlayerStore.getState();
+      joiningRef.current = true; // bloquer le useEffect de redirection automatique
 
       store.setSession(data.session as never);
       store.setTeam(data.team as never);
