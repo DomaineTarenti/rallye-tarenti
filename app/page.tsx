@@ -68,7 +68,7 @@ function HomeContent() {
         return;
       }
 
-      router.push("/rally");
+      router.push("/onboarding");
     } catch {
       setError("Erreur de connexion. Vérifiez votre réseau.");
       setLoading(false);

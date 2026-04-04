@@ -2,6 +2,36 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import type { ApiResponse } from "@/lib/types";
 
+// PATCH /api/team — mettre à jour le nom d'une équipe
+export async function PATCH(req: NextRequest) {
+  const { team_id, name } = await req.json();
+
+  if (!team_id || !name?.trim()) {
+    return NextResponse.json<ApiResponse>(
+      { data: null, error: "team_id et name requis" },
+      { status: 400 }
+    );
+  }
+
+  const supabase = createServerClient();
+
+  const { data: team, error } = await supabase
+    .from("teams")
+    .update({ name: name.trim() })
+    .eq("id", team_id)
+    .select()
+    .single();
+
+  if (error || !team) {
+    return NextResponse.json<ApiResponse>(
+      { data: null, error: error?.message ?? "Mise à jour échouée" },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json<ApiResponse>({ data: team, error: null });
+}
+
 // GET /api/team?access_code=FAM01 — récupérer une équipe par son code (recovery)
 export async function GET(req: NextRequest) {
   const accessCode = req.nextUrl.searchParams.get("access_code");
