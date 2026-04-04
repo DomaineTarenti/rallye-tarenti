@@ -67,6 +67,9 @@ export default function RallyPage() {
   const [chatInput, setChatInput] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
   const [helpSent, setHelpSent] = useState(false);
+  const [unreadFromGM, setUnreadFromGM] = useState(false);
+  const showChatRef = useRef(false);
+  useEffect(() => { showChatRef.current = showChat; }, [showChat]);
 
   useEffect(() => {
     if (!team) return;
@@ -87,6 +90,10 @@ export default function RallyPage() {
       }, (payload) => {
         const msg = payload.new as { id: string; message: string; type: string; created_at: string };
         setChatMessages((prev) => [...prev, msg]);
+        // Badge rouge si le chat est fermé et c'est un message du GM
+        if (msg.type === "message" && !showChatRef.current) {
+          setUnreadFromGM(true);
+        }
       })
       .subscribe();
 
@@ -462,10 +469,13 @@ export default function RallyPage() {
           {helpSent ? "Envoyé" : "Aide"}
         </button>
         <button
-          onClick={() => setShowChat(!showChat)}
-          className="flex items-center gap-1.5 rounded-xl bg-surface px-4 py-3 text-sm text-gray-400 hover:text-primary"
+          onClick={() => { setShowChat(!showChat); setUnreadFromGM(false); }}
+          className="relative flex items-center gap-1.5 rounded-xl bg-surface px-4 py-3 text-sm text-gray-400 hover:text-primary"
         >
-          <MessageCircle className="h-4 w-4" />
+          <MessageCircle className={`h-4 w-4 ${unreadFromGM ? "text-red-400" : ""}`} />
+          {unreadFromGM && (
+            <span className="absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse ring-2 ring-deep" />
+          )}
         </button>
         <button
           onClick={handleArrive}

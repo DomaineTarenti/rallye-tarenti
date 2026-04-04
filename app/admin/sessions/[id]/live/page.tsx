@@ -60,8 +60,11 @@ export default function LiveDashboard() {
   const [helpAlert, setHelpAlert] = useState<{ teamName: string; step: number; message: string } | null>(null);
   const [helpTeamId, setHelpTeamId] = useState<string | null>(null);
 
+  const [unreadTeams, setUnreadTeams] = useState<Set<string>>(new Set());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const msgModalRef = useRef<{ teamId: string; teamName: string } | null>(null);
+  useEffect(() => { msgModalRef.current = msgModal; }, [msgModal]);
 
   const loadData = useCallback(async () => {
     try {
@@ -112,6 +115,16 @@ export default function LiveDashboard() {
           document.title = "\u{1F198} The Quest — Help needed!";
           setTimeout(() => { document.title = "The Quest Admin"; setHelpAlert(null); setHelpTeamId(null); }, 15000);
         }
+        // Marquer l'équipe comme ayant des messages non lus si le chat n'est pas ouvert pour elle
+        if ((msg.type === "player_message" || msg.type === "help_request") && msg.team_id) {
+          if (msgModalRef.current?.teamId !== msg.team_id) {
+            setUnreadTeams((prev) => {
+              const next = new Set(prev);
+              next.add(msg.team_id!);
+              return next;
+            });
+          }
+        }
       })
       .subscribe();
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); supabase.removeChannel(ch); };
@@ -150,6 +163,7 @@ export default function LiveDashboard() {
 
   async function openChat(teamId: string, teamName: string) {
     setMsgModal({ teamId, teamName });
+    setUnreadTeams((prev) => { const next = new Set(prev); next.delete(teamId); return next; });
     setMsgText("");
     setChatHistory([]);
     const { data } = await supabase
@@ -293,12 +307,10 @@ export default function LiveDashboard() {
               <table className="w-full text-left text-sm">
                 <thead><tr className="border-b border-gray-100 text-xs text-gray-500">
                   <th className="px-4 py-2.5 font-medium">#</th>
-                  <th className="px-4 py-2.5 font-medium">Team</th>
-                  <th className="px-4 py-2.5 font-medium">Chapter</th>
-                  <th className="px-4 py-2.5 font-medium">Score</th>
-                  <th className="px-4 py-2.5 font-medium">Rank</th>
-                  <th className="px-4 py-2.5 font-medium">Time</th>
-                  <th className="px-4 py-2.5 font-medium">Status</th>
+                  <th className="px-4 py-2.5 font-medium">Équipe</th>
+                  <th className="px-4 py-2.5 font-medium">Étapes</th>
+                  <th className="px-4 py-2.5 font-medium">Temps</th>
+                  <th className="px-4 py-2.5 font-medium">Statut</th>
                   <th className="px-4 py-2.5 font-medium">Actions</th>
                 </tr></thead>
                 <tbody>
@@ -337,10 +349,6 @@ export default function LiveDashboard() {
                             <div className="h-full rounded-full bg-indigo-500" style={{ width: `${team.total_steps ? (team.completed_steps / team.total_steps) * 100 : 0}%` }} />
                           </div>
                         </td>
-                        <td className="px-4 py-3 font-bold text-amber-600">{sc !== null ? sc : <span className="text-gray-300">—</span>}</td>
-                        <td className="px-4 py-3">
-                          {rk?.key && <span className={`rounded px-2 py-0.5 text-[10px] font-semibold ${rk.key === "diamond" ? "bg-cyan-50 text-cyan-700" : rk.key === "platinum" ? "bg-purple-50 text-purple-700" : rk.key === "gold" ? "bg-amber-50 text-amber-700" : rk.key === "silver" ? "bg-gray-100 text-gray-600" : "bg-orange-50 text-orange-700"}`}>{rk.label}</span>}
-                        </td>
                         <td className="px-4 py-3"><div className="flex items-center gap-1 text-gray-500"><Clock className="h-3 w-3" /><span className="font-mono text-xs">{hasStarted ? formatElapsed(el) : "—"}</span></div></td>
                         <td className="px-4 py-3">
                           <span className={`rounded px-2 py-0.5 text-[10px] font-semibold ${team.status === "playing" ? (stuck ? "bg-amber-100 text-amber-700" : "bg-green-50 text-green-700") : team.status === "finished" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-500"}`}>{stuck ? "Stuck" : team.status}</span>
@@ -356,8 +364,11 @@ export default function LiveDashboard() {
                             </button>
                             {/* Message / Chat */}
                             <button onClick={() => openChat(team.id, team.name)}
-                              title="Chat with team" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-blue-600">
-                              <MessageSquare className="h-3.5 w-3.5" />
+                              title="Chat with team" className="relative rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-blue-600">
+                              <MessageSquare className={`h-3.5 w-3.5 ${unreadTeams.has(team.id) ? "text-red-500" : ""}`} />
+                              {unreadTeams.has(team.id) && (
+                                <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse ring-2 ring-white" />
+                              )}
                             </button>
                             {/* Add time */}
                             <button onClick={() => addTime(team.id)} disabled={actionLoading === `time-${team.id}`}
