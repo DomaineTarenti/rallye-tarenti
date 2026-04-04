@@ -61,6 +61,7 @@ export default function LiveDashboard() {
   const [helpTeamId, setHelpTeamId] = useState<string | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -118,6 +119,33 @@ export default function LiveDashboard() {
 
   useEffect(() => { const i = setInterval(() => setTick((t) => t + 1), 10000); return () => clearInterval(i); }, []);
 
+  // ── Subscription Realtime sur les messages du chat ouvert ──
+  useEffect(() => {
+    if (!msgModal) return;
+    const ch = supabase
+      .channel(`chat-modal-${msgModal.teamId}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "team_messages",
+        filter: `team_id=eq.${msgModal.teamId}`,
+      }, (payload) => {
+        const msg = payload.new as { id: string; message: string; type: string; created_at: string };
+        setChatHistory((prev) =>
+          prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]
+        );
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [msgModal?.teamId]);
+
+  // ── Auto-scroll vers le bas à chaque nouveau message ──
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [chatHistory]);
+
   // ── Actions ──
 
   async function openChat(teamId: string, teamName: string) {
@@ -140,8 +168,7 @@ export default function LiveDashboard() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ team_id: msgModal.teamId, session_id: sessionId, message: msgText.trim() }),
     });
-    setChatHistory((prev) => [...prev, { id: Date.now().toString(), message: msgText.trim(), type: "message", created_at: new Date().toISOString() }]);
-    setMsgText("");
+    setMsgText(""); // le message apparaîtra via la subscription Realtime
     setMsgSending(false);
   }
 
@@ -367,7 +394,7 @@ export default function LiveDashboard() {
             </div>
 
             {/* Chat history */}
-            <div className="mb-3 max-h-60 overflow-y-auto rounded-lg bg-gray-50 p-3 space-y-2">
+            <div ref={chatScrollRef} className="mb-3 max-h-60 overflow-y-auto rounded-lg bg-gray-50 p-3 space-y-2">
               {chatHistory.length === 0 && (
                 <p className="text-xs text-gray-400 italic text-center">No messages yet</p>
               )}
