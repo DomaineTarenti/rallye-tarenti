@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Lightbulb, MessageCircle, Send, X, CheckCircle, XCircle } from "lucide-react";
 import { usePlayerStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
-import type { ApiResponse, AnswerResult } from "@/lib/types";
+import type { ApiResponse, AnswerResult, Team } from "@/lib/types";
 
 type Phase = "question" | "fun_fact";
 
@@ -16,6 +16,7 @@ export default function QuestionPage() {
   const currentStep = usePlayerStore((s) => s.currentStep);
   const objects = usePlayerStore((s) => s.objects);
   const setProgress = usePlayerStore((s) => s.setProgress);
+  const setTeam = usePlayerStore((s) => s.setTeam);
 
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
@@ -87,12 +88,14 @@ export default function QuestionPage() {
       if (data?.correct) {
         setFunFact(data.fun_fact ?? "");
         setPhase("fun_fact");
-        // Rafraîchir la progression
+        // Rafraîchir la progression (et le statut équipe si dernière étape)
         if (session) {
           const gameRes = await fetch(`/api/game?team_id=${team!.id}&session_id=${session.id}`);
           const gameJson: ApiResponse = await gameRes.json();
           if (gameJson.data) {
-            setProgress((gameJson.data as Record<string, unknown>).progress as never[]);
+            const d = gameJson.data as Record<string, unknown>;
+            setProgress(d.progress as never[]);
+            if (d.team) setTeam(d.team as Team);
           }
         }
       } else {
@@ -159,16 +162,31 @@ export default function QuestionPage() {
             <p className="text-sm leading-relaxed text-gray-200">{funFact}</p>
           </div>
 
-          <p className="mb-6 text-sm text-gray-400">
-            Super ! Maintenant, prenez une photo souvenir avec {objectName} !
-          </p>
-
-          <button
-            onClick={() => router.push("/rally/camera")}
-            className="w-full max-w-sm rounded-xl bg-primary py-4 text-lg font-bold text-white transition-all hover:bg-primary-dark active:scale-95"
-          >
-            📸 Prendre la photo !
-          </button>
+          {targetObject?.is_final ? (
+            <>
+              <p className="mb-6 text-sm text-gray-400">
+                Vous avez complété le Rallye Tarenti !
+              </p>
+              <button
+                onClick={() => router.push("/finish")}
+                className="w-full max-w-sm rounded-xl bg-primary py-4 text-lg font-bold text-white transition-all hover:bg-primary-dark active:scale-95 shadow-lg shadow-primary/30"
+              >
+                🎉 Voir les félicitations !
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="mb-6 text-sm text-gray-400">
+                Super ! Maintenant, prenez une photo souvenir avec {objectName} !
+              </p>
+              <button
+                onClick={() => router.push("/rally/camera")}
+                className="w-full max-w-sm rounded-xl bg-primary py-4 text-lg font-bold text-white transition-all hover:bg-primary-dark active:scale-95"
+              >
+                📸 Prendre la photo !
+              </button>
+            </>
+          )}
         </div>
       </main>
     );
