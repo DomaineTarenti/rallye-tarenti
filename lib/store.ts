@@ -1,126 +1,70 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type {
-  Session,
-  Team,
-  Step,
-  TeamProgress,
-  QuestObject,
-  ThemeConfig,
-  TeamCharacter,
-} from "./types";
+import type { Session, Team, Step, TeamProgress, QuestObject, ThemeConfig, Photo } from "./types";
 
-// ─── Player store ────────────────────────────────────────────────
+// ─── Player store ────────────────────────────────────────────
 interface PlayerState {
   _hasHydrated: boolean;
   session: Session | null;
   team: Team | null;
-  teamCharacter: TeamCharacter | null;
   currentStep: Step | null;
+  currentStepIndex: number;   // 0-based index parmi les steps triés
   steps: Step[];
   objects: QuestObject[];
   progress: TeamProgress[];
-  currentStepIndex: number;
-  score: number;
-  currentStepScore: number;
-  stepStartTime: number;
-  collectedLetters: Record<string, string>;
-  startTime: number | null;
+  photos: Photo[];
 
   setHasHydrated: (v: boolean) => void;
   setSession: (session: Session | null) => void;
   setTeam: (team: Team | null) => void;
-  setTeamCharacter: (tc: TeamCharacter | null) => void;
   setCurrentStep: (step: Step | null) => void;
+  setCurrentStepIndex: (i: number) => void;
   setSteps: (steps: Step[]) => void;
   setObjects: (objects: QuestObject[]) => void;
   setProgress: (progress: TeamProgress[]) => void;
-  setCurrentStepIndex: (index: number) => void;
-  setScore: (score: number) => void;
-  setCurrentStepScore: (s: number) => void;
-  setStepStartTime: (t: number) => void;
-  setCollectedLetters: (l: Record<string, string>) => void;
-  addCollectedLetter: (physicalId: string, letter: string) => void;
-  setStartTime: (t: number | null) => void;
-  advanceStep: () => void;
+  setPhotos: (photos: Photo[]) => void;
+  addPhoto: (photo: Photo) => void;
   reset: () => void;
 }
 
 export const usePlayerStore = create<PlayerState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       _hasHydrated: false,
       session: null,
       team: null,
-      teamCharacter: null,
       currentStep: null,
+      currentStepIndex: 0,
       steps: [],
       objects: [],
       progress: [],
-      currentStepIndex: 0,
-      score: 1000,
-      currentStepScore: 0,
-      stepStartTime: 0,
-      collectedLetters: {},
-      startTime: null,
+      photos: [],
 
       setHasHydrated: (v) => set({ _hasHydrated: v }),
       setSession: (session) => set({ session }),
       setTeam: (team) => set({ team }),
-      setTeamCharacter: (tc) => set({ teamCharacter: tc }),
       setCurrentStep: (step) => set({ currentStep: step }),
+      setCurrentStepIndex: (i) => set({ currentStepIndex: i }),
       setSteps: (steps) => set({ steps }),
       setObjects: (objects) => set({ objects }),
       setProgress: (progress) => set({ progress }),
-      setCurrentStepIndex: (index) => {
-        const { steps } = get();
-        set({
-          currentStepIndex: index,
-          currentStep: steps[index] ?? null,
-          stepStartTime: Date.now(),
-        });
-      },
-      setScore: (score) => set({ score }),
-      setCurrentStepScore: (s) => set({ currentStepScore: s }),
-      setStepStartTime: (t) => set({ stepStartTime: t }),
-      setCollectedLetters: (l) => set({ collectedLetters: l }),
-      addCollectedLetter: (physicalId, letter) => set((state) => ({
-        collectedLetters: { ...state.collectedLetters, [physicalId]: letter },
-      })),
-      setStartTime: (t) => set({ startTime: t }),
-
-      advanceStep: () => {
-        const { currentStepIndex, steps } = get();
-        const next = currentStepIndex + 1;
-        if (next < steps.length) {
-          set({
-            currentStepIndex: next,
-            currentStep: null, // cleared — player must scan the next object
-            stepStartTime: 0,
-            currentStepScore: 0,
-          });
-        }
-      },
+      setPhotos: (photos) => set({ photos }),
+      addPhoto: (photo) => set((state) => ({ photos: [...state.photos, photo] })),
 
       reset: () =>
         set({
           session: null,
           team: null,
-          teamCharacter: null,
           currentStep: null,
+          currentStepIndex: 0,
           steps: [],
           objects: [],
           progress: [],
-          currentStepIndex: 0,
-          score: 1000,
-          currentStepScore: 0,
-          stepStartTime: 0,
-          collectedLetters: {},
-          startTime: null,
+          photos: [],
         }),
     }),
     {
-      name: "quest-player",
+      name: "tarenti-player",
       storage: createJSONStorage(() =>
         typeof window !== "undefined"
           ? localStorage
@@ -130,7 +74,7 @@ export const usePlayerStore = create<PlayerState>()(
               removeItem: () => {},
             }
       ),
-      version: 2,
+      version: 1,
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
       },
@@ -138,18 +82,18 @@ export const usePlayerStore = create<PlayerState>()(
   )
 );
 
-// ─── Theme store ─────────────────────────────────────────────────
+// ─── Theme store ─────────────────────────────────────────────
 interface ThemeState {
   theme: ThemeConfig;
   setTheme: (theme: Partial<ThemeConfig>) => void;
 }
 
 const defaultTheme: ThemeConfig = {
-  primaryColor: "#7C3AED",
-  primaryColorLight: "#A78BFA",
-  primaryColorDark: "#5B21B6",
+  primaryColor: "#2D7D46",
+  primaryColorLight: "#4CAF70",
+  primaryColorDark: "#1B5E30",
   logoUrl: null,
-  appName: "The Quest",
+  appName: "Rallye Tarenti",
 };
 
 export const useThemeStore = create<ThemeState>((set) => ({

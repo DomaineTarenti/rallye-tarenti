@@ -1,96 +1,62 @@
-// ─── Organization (white-label client) ───────────────────────────
-export interface Organization {
-  id: string;
-  name: string;
-  slug: string;
-  logo_url: string | null;
-  primary_color: string;
-  created_at: string;
-}
-
-// ─── Session (une chasse au trésor) ──────────────────────────────
+// ─── Session (un événement rallye) ───────────────────────────
 export type SessionStatus = "draft" | "active" | "paused" | "completed";
 
 export interface Session {
   id: string;
-  org_id: string;
   name: string;
-  code: string; // code court pour rejoindre
+  code: string;
   status: SessionStatus;
-  theme: string | null;
-  duration_minutes: number;
   logo_url: string | null;
   primary_color: string | null;
-  secret_word: string | null;
   created_at: string;
   started_at: string | null;
-  intro_text: string | null;
-  intro_enigme: string | null;
-  intro_answer: string | null;
 }
 
-// ─── Object (objet physique avec QR) ─────────────────────────────
+// ─── QuestObject (animal / point d'intérêt) ──────────────────
 export interface QuestObject {
   id: string;
   session_id: string;
   name: string;
-  qr_code_id: string;
+  emoji: string;
   order: number;
   description: string | null;
-  model_url: string | null;
-  latitude: number | null;
-  longitude: number | null;
+  latitude: number;
+  longitude: number;
   is_final: boolean;
-  physical_id: string | null;
-  narrative_name: string | null;
-  hidden_letter: string | null;
   created_at: string;
 }
 
-// ─── Step (étape d'une quête) ────────────────────────────────────
-export type StepType = "enigme" | "epreuve" | "navigation";
-
+// ─── Step (question sur l'animal) ────────────────────────────
 export interface Step {
   id: string;
   object_id: string;
-  text_narratif: string;
-  enigme: string | null;
-  answer: string | null;
-  photo_indice_url: string | null;
-  type: StepType;
+  intro_text: string | null;
+  question: string;
+  answer: string;
+  hint: string | null;
+  fun_fact: string;
   order: number;
   created_at: string;
 }
 
-// ─── Team (équipe de joueurs) ────────────────────────────────────
+// ─── Team (équipe participante) ──────────────────────────────
 export type TeamStatus = "waiting" | "playing" | "finished";
-
-export type TeamRank = "bronze" | "silver" | "gold" | "platinum" | "diamond";
 
 export interface Team {
   id: string;
   session_id: string;
   name: string;
-  character: string | null;
-  avatar_url: string | null;
   status: TeamStatus;
-  final_score: number | null;
-  rank: TeamRank | null;
-  rank_label: string | null; // nom personnalisé par l'orga
-  completion_time: number | null; // secondes
-  certificate_url: string | null;
+  completion_time: number | null;
   locked: boolean;
-  object_order: string[];
-  collected_letters: Record<string, string>;
   access_code: string | null;
   is_precreated: boolean;
+  started_at: string | null;
   created_at: string;
 }
 
-// ─── Team Progress (progression par étape) ───────────────────────
+// ─── Team Progress (avancement par étape) ────────────────────
 export type ProgressStatus = "locked" | "active" | "completed" | "skipped";
-
-export type HintType = "narratif" | "photo" | "direct";
 
 export interface TeamProgress {
   id: string;
@@ -98,49 +64,21 @@ export interface TeamProgress {
   step_id: string;
   status: ProgressStatus;
   hints_used: number;
-  hint_types: HintType[];
-  time_on_step: number | null; // secondes
-  epreuve_attempts: number;
-  epreuve_success: boolean | null;
   completed_at: string | null;
   created_at: string;
 }
 
-// ─── Scoring config (par session) ────────────────────────────────
-export interface RankThresholds {
-  diamond: number;
-  platinum: number;
-  gold: number;
-  silver: number;
-  bronze: number;
-}
-
-export interface ScoringConfig {
+// ─── Photo (prise à chaque étape) ────────────────────────────
+export interface Photo {
   id: string;
-  session_id: string;
-  base_score: number;
-  penalty_per_minute: number;
-  penalty_per_hint: number;
-  bonus_epreuve_success: number;
-  rank_thresholds: RankThresholds;
-  rank_labels: Record<string, string>; // ex: { diamond: "Légende", gold: "Héros" }
+  team_id: string;
+  step_id: string | null;
+  object_id: string | null;
+  storage_url: string;
   created_at: string;
 }
 
-// ─── Staff Member ────────────────────────────────────────────────
-export type StaffRole = "gardien" | "animateur" | "admin";
-
-export interface StaffMember {
-  id: string;
-  session_id: string;
-  user_id: string | null;
-  name: string;
-  role: StaffRole;
-  assigned_step_id: string | null;
-  created_at: string;
-}
-
-// ─── Theme config ────────────────────────────────────────────────
+// ─── Theme config (cosmétique) ───────────────────────────────
 export interface ThemeConfig {
   primaryColor: string;
   primaryColorLight: string;
@@ -149,31 +87,14 @@ export interface ThemeConfig {
   appName: string;
 }
 
-// ─── Team character (totem + couleur choisis) ───────────────────
-export interface TeamCharacter {
-  animal: string;
-  animalEmoji: string;
-  color: string;
-  warCry: string;
-  teamCode: string;
-}
-
-// ─── Scan result ────────────────────────────────────────────────
-export interface ScanResult {
-  valid: boolean;
-  reason?: "wrong_order" | "already_scanned" | "unknown" | "quest_complete";
-  message?: string;
-  step?: Step;
-  object?: QuestObject;
-}
-
-// ─── Answer result ──────────────────────────────────────────────
+// ─── Answer result ───────────────────────────────────────────
 export interface AnswerResult {
   correct: boolean;
   message: string;
+  fun_fact?: string;
 }
 
-// ─── API response helpers ────────────────────────────────────────
+// ─── API response helpers ────────────────────────────────────
 export interface ApiResponse<T = unknown> {
   data: T | null;
   error: string | null;

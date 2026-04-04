@@ -3,11 +3,7 @@
 import { useApplyTheme } from "@/lib/theme";
 import { OfflineBanner, HydrationGuard } from "@/components/shared";
 
-export default function PlayerLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RallyLayout({ children }: { children: React.ReactNode }) {
   useApplyTheme();
   return (
     <>

@@ -9,7 +9,6 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
-  QrCode,
   Loader2,
   Play,
   Pause,
@@ -64,7 +63,6 @@ export default function ConfigureSessionPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [generatingQR, setGeneratingQR] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [regeneratingNarrative, setRegeneratingNarrative] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -299,7 +297,6 @@ export default function ConfigureSessionPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           base_name: obj.name,
-          theme: session.theme ?? "A mysterious adventure",
           session_name: session.name,
         }),
       });
@@ -329,7 +326,6 @@ export default function ConfigureSessionPage() {
         body: JSON.stringify({
           session_id: sessionId,
           session_name: session.name,
-          theme: session.theme ?? "A mysterious adventure",
         }),
       });
       const json: ApiResponse = await res.json();
@@ -343,106 +339,6 @@ export default function ConfigureSessionPage() {
       alert("Generation failed — network error");
     }
     setGenerating(false);
-  }
-
-  async function generateQRPdf() {
-    setGeneratingQR(true);
-    try {
-      const { jsPDF } = await import("jspdf");
-      const QRCode = (await import("qrcode")).default;
-
-      const doc = new jsPDF("p", "mm", "a4");
-      const pageW = 210;
-      const pageH = 297;
-      const margin = 20;
-      const cols = 2;
-      const rows = 2;
-      const qrSize = 70;
-      const cellW = (pageW - margin * 2) / cols;
-      const headerH = 30;
-      const cellH = (pageH - margin * 2 - headerH) / rows;
-
-      const savedObjects = objects.filter((o) => o.id && o.physical_id);
-      const totalPages = Math.ceil(savedObjects.length / 4);
-
-      for (let i = 0; i < savedObjects.length; i++) {
-        const pageIdx = Math.floor(i / 4);
-        const posOnPage = i % 4;
-        const col = posOnPage % cols;
-        const row = Math.floor(posOnPage / cols);
-
-        if (i > 0 && posOnPage === 0) doc.addPage();
-
-        if (posOnPage === 0) {
-          doc.setFontSize(18);
-          doc.setFont("helvetica", "bold");
-          doc.setTextColor(127, 119, 221);
-          doc.text("THE QUEST", pageW / 2, margin + 5, { align: "center" });
-
-          doc.setFontSize(10);
-          doc.setFont("helvetica", "normal");
-          doc.setTextColor(100, 100, 100);
-          doc.text(session?.name ?? "Quest Session", pageW / 2, margin + 12, { align: "center" });
-
-          doc.setDrawColor(127, 119, 221);
-          doc.setLineWidth(0.5);
-          doc.line(margin, margin + 16, pageW - margin, margin + 16);
-
-          doc.setFontSize(7);
-          doc.setTextColor(180, 180, 180);
-          doc.text(`Page ${pageIdx + 1} / ${totalPages}`, pageW / 2, pageH - 10, { align: "center" });
-          doc.text("Print and place each QR code next to its corresponding object", pageW / 2, pageH - 6, { align: "center" });
-        }
-
-        const obj = savedObjects[i];
-        const cellX = margin + col * cellW;
-        const cellY = margin + headerH + row * cellH;
-
-        doc.setDrawColor(220, 220, 220);
-        doc.setLineWidth(0.3);
-        doc.roundedRect(cellX + 4, cellY + 2, cellW - 8, cellH - 8, 3, 3, "S");
-
-        const badgeX = cellX + 10;
-        const badgeY = cellY + 8;
-        doc.setFillColor(127, 119, 221);
-        doc.circle(badgeX, badgeY, 4, "F");
-        doc.setFontSize(8);
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(255, 255, 255);
-        doc.text(String(i + 1), badgeX, badgeY + 1, { align: "center" });
-
-        doc.setFontSize(11);
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(30, 30, 30);
-        const nameX = cellX + cellW / 2;
-        doc.text(obj.name, nameX, cellY + 12, { align: "center" });
-
-        const qrContent = obj.physical_id ?? obj.qr_code_id ?? obj.name;
-        const qrDataUrl = await QRCode.toDataURL(qrContent, {
-          width: 400, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" },
-        });
-        const qrX = cellX + (cellW - qrSize) / 2;
-        const qrY = cellY + 18;
-        doc.addImage(qrDataUrl, "PNG", qrX, qrY, qrSize, qrSize);
-
-        doc.setFontSize(6);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(160, 160, 160);
-        doc.text(qrContent, nameX, qrY + qrSize + 4, { align: "center" });
-
-        if (obj.description) {
-          doc.setFontSize(7);
-          doc.setTextColor(130, 130, 130);
-          const desc = obj.description.length > 60 ? obj.description.slice(0, 57) + "..." : obj.description;
-          doc.text(desc, nameX, qrY + qrSize + 9, { align: "center" });
-        }
-      }
-
-      doc.save(`${session?.name ?? "quest"}-qr-codes.pdf`);
-    } catch (err) {
-      console.error("QR PDF generation error:", err);
-    }
-    setGeneratingQR(false);
   }
 
   async function toggleSessionStatus() {
@@ -550,14 +446,6 @@ export default function ConfigureSessionPage() {
             {generating ? "Generating 9 stages..." : "Generate with AI"}
           </button>
           <button
-            onClick={generateQRPdf}
-            disabled={generatingQR || objects.filter((o) => o.id).length === 0}
-            className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          >
-            {generatingQR ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
-            Generate QR PDF
-          </button>
-          <button
             onClick={addObject}
             className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
@@ -566,24 +454,7 @@ export default function ConfigureSessionPage() {
         </div>
 
         {/* Intro section */}
-        {session && (session.intro_text || session.intro_enigme) && (
-          <div className="mb-6 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
-            <h3 className="mb-2 text-sm font-semibold text-indigo-700">Introduction (Step 0)</h3>
-            {session.intro_text && (
-              <p className="mb-2 text-sm italic text-gray-600">{session.intro_text}</p>
-            )}
-            {session.intro_enigme && (
-              <div className="mt-2 rounded-lg bg-white p-3">
-                <p className="text-xs font-medium text-gray-500">First Riddle</p>
-                <p className="text-sm text-gray-800">{session.intro_enigme}</p>
-                <div className="mt-1 flex items-center gap-2">
-                  <span className="text-xs text-gray-400">Answer:</span>
-                  <span className="rounded bg-green-50 px-2 py-0.5 font-mono text-sm font-bold text-green-700">{session.intro_answer ?? "—"}</span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        {/* intro_text/intro_enigme supprimés dans Rallye Tarenti */}
 
         {/* Objects list */}
         <div className="space-y-3">

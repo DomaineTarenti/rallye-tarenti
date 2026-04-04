@@ -213,7 +213,7 @@ export default function AdminDashboard() {
                       <div className="mt-0.5 flex items-center gap-3 text-xs text-gray-500">
                         <span className={`font-medium ${cfg.color}`}>{cfg.label}</span>
                         <span>Code: {session.code}</span>
-                        <span>{session.duration_minutes} min</span>
+                        <span>{(session as unknown as Record<string, unknown>).duration_minutes as number ?? "—"} min</span>
                         <span>{session.team_count} teams</span>
                       </div>
                     </div>

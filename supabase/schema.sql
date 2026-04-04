@@ -1,221 +1,301 @@
 -- ============================================================
--- The Quest — Schéma Supabase
+-- Rallye Tarenti — Schéma complet + données de base (v2)
+-- À exécuter dans Supabase SQL Editor (une seule fois)
 -- ============================================================
 
--- Extensions
-create extension if not exists "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- ─── Organizations (clients white-label) ─────────────────────
-create table organizations (
-  id          uuid primary key default uuid_generate_v4(),
-  name        text not null,
-  slug        text not null unique,
-  logo_url    text,
-  primary_color text not null default '#7C3AED',
-  created_at  timestamptz not null default now()
+-- ─── Types ───────────────────────────────────────────────────
+CREATE TYPE session_status  AS ENUM ('draft', 'active', 'paused', 'completed');
+CREATE TYPE team_status     AS ENUM ('waiting', 'playing', 'finished');
+CREATE TYPE progress_status AS ENUM ('locked', 'active', 'completed', 'skipped');
+
+-- ─── Sessions (un événement rallye) ──────────────────────────
+CREATE TABLE sessions (
+  id            uuid        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name          text        NOT NULL,
+  code          text        NOT NULL UNIQUE,
+  status        session_status NOT NULL DEFAULT 'draft',
+  logo_url      text,
+  primary_color text,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  started_at    timestamptz
 );
 
--- ─── Sessions (chasses au trésor) ────────────────────────────
-create type session_status as enum ('draft', 'active', 'paused', 'completed');
+CREATE INDEX idx_sessions_code ON sessions(code);
 
-create table sessions (
-  id              uuid primary key default uuid_generate_v4(),
-  org_id          uuid not null references organizations(id) on delete cascade,
-  name            text not null,
-  code            text not null unique,
-  status          session_status not null default 'draft',
-  theme           text,
-  duration_minutes integer not null default 60,
-  logo_url        text,
-  primary_color   text,
-  created_at      timestamptz not null default now(),
-  started_at      timestamptz
+-- ─── Objects (animaux / points d'intérêt) ────────────────────
+CREATE TABLE objects (
+  id          uuid             PRIMARY KEY DEFAULT uuid_generate_v4(),
+  session_id  uuid             NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  name        text             NOT NULL,
+  emoji       text             NOT NULL DEFAULT '🐾',
+  "order"     integer          NOT NULL DEFAULT 0,
+  description text,                       -- indice narratif pendant la navigation GPS
+  latitude    double precision NOT NULL,
+  longitude   double precision NOT NULL,
+  is_final    boolean          NOT NULL DEFAULT false,
+  created_at  timestamptz      NOT NULL DEFAULT now()
 );
 
-create index idx_sessions_code on sessions(code);
-create index idx_sessions_org on sessions(org_id);
+CREATE INDEX idx_objects_session ON objects(session_id);
 
--- ─── Objects (objets physiques avec QR) ──────────────────────
-create table objects (
-  id          uuid primary key default uuid_generate_v4(),
-  session_id  uuid not null references sessions(id) on delete cascade,
-  name        text not null,
-  qr_code_id  text not null unique,
-  "order"     integer not null default 0,
-  description text,
-  model_url   text,
-  created_at  timestamptz not null default now()
+-- ─── Steps (1 question par animal) ───────────────────────────
+CREATE TABLE steps (
+  id          uuid        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  object_id   uuid        NOT NULL REFERENCES objects(id) ON DELETE CASCADE,
+  intro_text  text,                       -- texte affiché à l'arrivée sur le lieu
+  question    text        NOT NULL,
+  answer      text        NOT NULL,
+  hint        text,                       -- 1 seul indice disponible
+  fun_fact    text        NOT NULL DEFAULT '',
+  "order"     integer     NOT NULL DEFAULT 0,
+  created_at  timestamptz NOT NULL DEFAULT now()
 );
 
-create index idx_objects_session on objects(session_id);
-create index idx_objects_qr on objects(qr_code_id);
+CREATE INDEX idx_steps_object ON steps(object_id);
 
--- ─── Steps (étapes d'une quête) ──────────────────────────────
-create type step_type as enum ('enigme', 'epreuve', 'navigation');
-
-create table steps (
-  id              uuid primary key default uuid_generate_v4(),
-  object_id       uuid not null references objects(id) on delete cascade,
-  text_narratif   text not null default '',
-  enigme          text,
-  answer          text,
-  photo_indice_url text,
-  type            step_type not null default 'enigme',
-  "order"         integer not null default 0,
-  created_at      timestamptz not null default now()
+-- ─── Teams (équipes participantes) ───────────────────────────
+CREATE TABLE teams (
+  id              uuid        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  session_id      uuid        NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  name            text        NOT NULL,
+  status          team_status NOT NULL DEFAULT 'waiting',
+  completion_time integer,               -- secondes depuis le départ
+  locked          boolean     NOT NULL DEFAULT false,
+  access_code     text        UNIQUE,
+  is_precreated   boolean     NOT NULL DEFAULT false,
+  started_at      timestamptz,
+  created_at      timestamptz NOT NULL DEFAULT now()
 );
 
-create index idx_steps_object on steps(object_id);
+CREATE INDEX idx_teams_session      ON teams(session_id);
+CREATE INDEX idx_teams_access_code  ON teams(access_code);
 
--- ─── Teams (équipes de joueurs) ──────────────────────────────
-create type team_status as enum ('waiting', 'playing', 'finished');
-create type team_rank as enum ('bronze', 'silver', 'gold', 'platinum', 'diamond');
-
-create table teams (
-  id              uuid primary key default uuid_generate_v4(),
-  session_id      uuid not null references sessions(id) on delete cascade,
-  name            text not null,
-  character       text,
-  avatar_url      text,
-  status          team_status not null default 'waiting',
-  final_score     integer,
-  rank            team_rank,
-  rank_label      text,
-  completion_time integer, -- secondes
-  certificate_url text,
-  created_at      timestamptz not null default now()
+-- ─── Team Progress (avancement par étape) ────────────────────
+CREATE TABLE team_progress (
+  id            uuid             PRIMARY KEY DEFAULT uuid_generate_v4(),
+  team_id       uuid             NOT NULL REFERENCES teams(id)  ON DELETE CASCADE,
+  step_id       uuid             NOT NULL REFERENCES steps(id)  ON DELETE CASCADE,
+  status        progress_status  NOT NULL DEFAULT 'locked',
+  hints_used    integer          NOT NULL DEFAULT 0,
+  completed_at  timestamptz,
+  created_at    timestamptz      NOT NULL DEFAULT now(),
+  UNIQUE(team_id, step_id)
 );
 
-create index idx_teams_session on teams(session_id);
+CREATE INDEX idx_progress_team ON team_progress(team_id);
+CREATE INDEX idx_progress_step ON team_progress(step_id);
 
--- ─── Team Progress (progression par étape) ───────────────────
-create type progress_status as enum ('locked', 'active', 'completed', 'skipped');
-create type hint_type as enum ('narratif', 'photo', 'direct');
-
-create table team_progress (
-  id              uuid primary key default uuid_generate_v4(),
-  team_id         uuid not null references teams(id) on delete cascade,
-  step_id         uuid not null references steps(id) on delete cascade,
-  status          progress_status not null default 'locked',
-  hints_used      integer not null default 0,
-  hint_types      hint_type[] not null default '{}',
-  time_on_step    integer, -- secondes
-  epreuve_attempts integer not null default 0,
-  epreuve_success boolean,
-  completed_at    timestamptz,
-  created_at      timestamptz not null default now(),
-  unique(team_id, step_id)
+-- ─── Photos (une par étape, prise sur place) ──────────────────
+CREATE TABLE photos (
+  id          uuid        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  team_id     uuid        NOT NULL REFERENCES teams(id)   ON DELETE CASCADE,
+  step_id     uuid        REFERENCES steps(id)            ON DELETE SET NULL,
+  object_id   uuid        REFERENCES objects(id)          ON DELETE SET NULL,
+  storage_url text        NOT NULL,
+  created_at  timestamptz NOT NULL DEFAULT now()
 );
 
-create index idx_progress_team on team_progress(team_id);
-create index idx_progress_step on team_progress(step_id);
+CREATE INDEX idx_photos_team ON photos(team_id);
 
--- ─── Staff Members ───────────────────────────────────────────
-create type staff_role as enum ('gardien', 'animateur', 'admin');
-
-create table staff_members (
-  id              uuid primary key default uuid_generate_v4(),
-  session_id      uuid not null references sessions(id) on delete cascade,
-  user_id         uuid,
-  name            text not null,
-  role            staff_role not null default 'gardien',
-  assigned_step_id uuid references steps(id) on delete set null,
-  created_at      timestamptz not null default now()
+-- ─── Team Messages (chat Game Master ↔ équipe) ────────────────
+CREATE TABLE team_messages (
+  id          uuid        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  team_id     uuid        NOT NULL REFERENCES teams(id)    ON DELETE CASCADE,
+  session_id  uuid        REFERENCES sessions(id)          ON DELETE CASCADE,
+  message     text        NOT NULL,
+  type        text        NOT NULL DEFAULT 'message',      -- 'message' | 'system' | 'help'
+  created_at  timestamptz NOT NULL DEFAULT now()
 );
 
-create index idx_staff_session on staff_members(session_id);
+CREATE INDEX idx_messages_team ON team_messages(team_id);
 
--- ─── Scoring Config (paramètres de scoring par session) ──────
-create table scoring_config (
-  id                    uuid primary key default uuid_generate_v4(),
-  session_id            uuid not null unique references sessions(id) on delete cascade,
-  base_score            integer not null default 1000,
-  penalty_per_minute    integer not null default 1,
-  penalty_per_hint      integer not null default 15,
-  bonus_epreuve_success integer not null default 50,
-  rank_thresholds       jsonb not null default '{"diamond": 950, "platinum": 850, "gold": 700, "silver": 500, "bronze": 0}',
-  rank_labels           jsonb not null default '{"diamond": "Diamant", "platinum": "Platine", "gold": "Or", "silver": "Argent", "bronze": "Bronze"}',
-  created_at            timestamptz not null default now()
+-- ─── RLS (Row Level Security) ─────────────────────────────────
+ALTER TABLE sessions      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE objects       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE steps         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE teams         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE team_progress ENABLE ROW LEVEL SECURITY;
+ALTER TABLE photos        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE team_messages ENABLE ROW LEVEL SECURITY;
+
+-- Sessions : lecture publique
+CREATE POLICY "Sessions readable by all"   ON sessions      FOR SELECT USING (true);
+-- Objects : lecture publique
+CREATE POLICY "Objects readable by all"    ON objects       FOR SELECT USING (true);
+-- Steps : lecture publique
+CREATE POLICY "Steps readable by all"      ON steps         FOR SELECT USING (true);
+-- Teams
+CREATE POLICY "Teams readable by all"      ON teams         FOR SELECT USING (true);
+CREATE POLICY "Teams insertable by all"    ON teams         FOR INSERT WITH CHECK (true);
+CREATE POLICY "Teams updatable by all"     ON teams         FOR UPDATE USING (true);
+-- Team Progress
+CREATE POLICY "Progress readable by all"   ON team_progress FOR SELECT USING (true);
+CREATE POLICY "Progress insertable by all" ON team_progress FOR INSERT WITH CHECK (true);
+CREATE POLICY "Progress updatable by all"  ON team_progress FOR UPDATE USING (true);
+-- Photos
+CREATE POLICY "Photos readable by all"     ON photos        FOR SELECT USING (true);
+CREATE POLICY "Photos insertable by all"   ON photos        FOR INSERT WITH CHECK (true);
+-- Messages
+CREATE POLICY "Messages readable by all"   ON team_messages FOR SELECT USING (true);
+CREATE POLICY "Messages insertable by all" ON team_messages FOR INSERT WITH CHECK (true);
+
+-- ─── Realtime ─────────────────────────────────────────────────
+ALTER PUBLICATION supabase_realtime ADD TABLE team_progress;
+ALTER PUBLICATION supabase_realtime ADD TABLE teams;
+ALTER PUBLICATION supabase_realtime ADD TABLE team_messages;
+
+-- ─── Storage bucket (à créer manuellement dans le dashboard) ──
+-- Storage → New bucket → "team-photos" → Public
+-- Permettre INSERT pour anon (joueurs sans compte)
+
+-- ============================================================
+-- DONNÉES DE BASE — Session TARENTI25 + 7 étapes animaux
+-- ============================================================
+
+-- ─── Session ─────────────────────────────────────────────────
+INSERT INTO sessions (id, name, code, status, primary_color) VALUES (
+  'a0000000-0000-4000-8000-000000000001',
+  'Rallye Tarenti 2025',
+  'TARENTI25',
+  'active',
+  '#2D7D46'
 );
 
--- ─── RLS (Row Level Security) ────────────────────────────────
-alter table organizations enable row level security;
-alter table sessions enable row level security;
-alter table objects enable row level security;
-alter table steps enable row level security;
-alter table teams enable row level security;
-alter table team_progress enable row level security;
-alter table staff_members enable row level security;
-alter table scoring_config enable row level security;
+-- ─── 7 Objets (animaux du domaine) ───────────────────────────
+-- Coordonnées GPS réelles du Domaine Tarenti, Tunisie
+-- À ajuster si besoin après vérification terrain
 
--- ─── Organizations ──────────────────────────────────────────
-create policy "Organizations readable by all"
-  on organizations for select
-  using (true);
+INSERT INTO objects (id, session_id, name, emoji, "order", description, latitude, longitude, is_final) VALUES
 
--- ─── Sessions ───────────────────────────────────────────────
--- Players can read active sessions (join by code)
-create policy "Active sessions readable by all"
-  on sessions for select
-  using (status = 'active');
+  ( 'b0000000-0001-4000-8000-000000000001',
+    'a0000000-0000-4000-8000-000000000001',
+    'Les Chèvres', '🐐', 1,
+    'Suivez le chemin vers l''enclos des chèvres. Ces curieuses vont adorer votre visite !',
+    36.68653492692563, 10.210360935921443, false ),
 
--- ─── Objects ────────────────────────────────────────────────
--- Players need to read objects for their session (scan flow)
-create policy "Objects readable by all"
-  on objects for select
-  using (true);
+  ( 'b0000000-0002-4000-8000-000000000001',
+    'a0000000-0000-4000-8000-000000000001',
+    'Les Vaches', '🐄', 2,
+    'Direction les vaches ! Ces douces bovines passent leur journée à brouter tranquillement.',
+    36.68790732639046, 10.209060248513682, false ),
 
--- ─── Steps ──────────────────────────────────────────────────
--- Players need to read steps (gameplay, answer checking)
-create policy "Steps readable by all"
-  on steps for select
-  using (true);
+  ( 'b0000000-0003-4000-8000-000000000001',
+    'a0000000-0000-4000-8000-000000000001',
+    'L''Âne', '🫏', 3,
+    'Un visiteur très patient vous attend... il a de grandes oreilles pour bien vous entendre !',
+    36.68630912674403, 10.208415150340297, false ),
 
--- ─── Teams ──────────────────────────────────────────────────
--- Anyone can read teams (rankings, own team)
-create policy "Teams readable by all"
-  on teams for select
-  using (true);
+  ( 'b0000000-0004-4000-8000-000000000001',
+    'a0000000-0000-4000-8000-000000000001',
+    'Les Cochons', '🐷', 4,
+    'Les cochons fouinent et grognent... ils vous ont sûrement déjà entendu arriver !',
+    36.68614330997645, 10.208318093945488, false ),
 
--- Anyone can create a team (join flow)
-create policy "Teams creatable by all"
-  on teams for insert
-  with check (true);
+  ( 'b0000000-0005-4000-8000-000000000001',
+    'a0000000-0000-4000-8000-000000000001',
+    'Le Champ Aromatique', '🌿', 5,
+    'Fermez les yeux et respirez... le champ aromatique du Domaine Tarenti vous attend.',
+    36.68417968248825, 10.207979379717381, false ),
 
--- Teams can be updated (status, score, rank)
-create policy "Teams updatable by all"
-  on teams for update
-  using (true);
+  ( 'b0000000-0006-4000-8000-000000000001',
+    'a0000000-0000-4000-8000-000000000001',
+    'Les Poules', '🐔', 6,
+    'Cot cot cot... les poules caquètent pour vous accueillir dans leur enclos !',
+    36.68608903628465, 10.209727428427485, false ),
 
--- ─── Team Progress ──────────────────────────────────────────
--- Players need to read their progress
-create policy "Progress readable by all"
-  on team_progress for select
-  using (true);
+  ( 'b0000000-0007-4000-8000-000000000001',
+    'a0000000-0000-4000-8000-000000000001',
+    'Le Lapin', '🐇', 7,
+    'Cherchez bien... le lapin est peut-être caché dans son terrier ou dans les fourrés !',
+    36.68610785682307, 10.209897078132796, false );
 
--- Progress entries created when team joins
-create policy "Progress creatable by all"
-  on team_progress for insert
-  with check (true);
+-- ─── 7 Steps (1 question par animal) ─────────────────────────
 
--- Progress updated on answer/hint/validation
-create policy "Progress updatable by all"
-  on team_progress for update
-  using (true);
+INSERT INTO steps (id, object_id, intro_text, question, answer, hint, fun_fact, "order") VALUES
 
--- ─── Staff Members ──────────────────────────────────────────
--- Staff list readable (for staff dashboard)
-create policy "Staff readable by all"
-  on staff_members for select
-  using (true);
+  ( 'c0000000-0001-4000-8000-000000000001',
+    'b0000000-0001-4000-8000-000000000001',
+    'Vous avez trouvé les chèvres du Domaine Tarenti ! Observez-les bien avant de répondre.',
+    'De quelle forme sont les pupilles d''une chèvre ?',
+    'rectangulaire',
+    'Regardez attentivement dans leurs yeux... ce n''est pas une forme ronde !',
+    'Les chèvres ont des pupilles rectangulaires ! Cette forme particulière leur permet de voir à presque 340° autour d''elles sans bouger la tête. Très pratique pour repérer les prédateurs dans la nature !',
+    1 ),
 
--- ─── Scoring Config ─────────────────────────────────────────
--- Score config readable (game needs scoring params)
-create policy "Scoring config readable by all"
-  on scoring_config for select
-  using (true);
+  ( 'c0000000-0002-4000-8000-000000000001',
+    'b0000000-0002-4000-8000-000000000001',
+    'Bienvenue chez les vaches du Domaine Tarenti ! Ces grandes dames passent leur temps à brouter et ruminer.',
+    'Combien d''estomacs a une vache ?',
+    '4',
+    'C''est plus d''un seul... les vaches sont des ruminants !',
+    'Les vaches ont 4 estomacs ! Elles avalent l''herbe, la régurgitent pour la mâcher à nouveau — c''est ce qu''on appelle ruminer. Elles passent jusqu''à 8 heures par jour à mâcher. Impressionnant, non ?',
+    1 ),
 
--- ─── Realtime ───────────────────────────────────────────────
--- Enable realtime on team_progress for staff validation
-alter publication supabase_realtime add table team_progress;
-alter publication supabase_realtime add table teams;
+  ( 'c0000000-0003-4000-8000-000000000001',
+    'b0000000-0003-4000-8000-000000000001',
+    'L''âne du Domaine vous attend avec sa bonne humeur légendaire ! Un animal fidèle et très intelligent.',
+    'Comment s''appelle le cri de l''âne ?',
+    'braiment',
+    'L''âne fait "hi-han"... ce son porte un nom précis !',
+    'Le cri de l''âne s''appelle le braiment ! Un hi-han peut s''entendre jusqu''à 3 km de distance. Les ânes beuglent pour communiquer avec leurs amis ou pour exprimer leurs émotions. Un animal très expressif !',
+    1 ),
+
+  ( 'c0000000-0004-4000-8000-000000000001',
+    'b0000000-0004-4000-8000-000000000001',
+    'Les cochons du Domaine grognent pour vous dire bonjour ! Des animaux bien plus intelligents qu''on ne le croit.',
+    'Quel est le nom du bébé cochon ?',
+    'porcelet',
+    'C''est un mot qui ressemble à "cochon"... en version miniature !',
+    'Le bébé cochon s''appelle le porcelet ! Les cochons sont parmi les animaux les plus intelligents de la ferme — plus que les chiens selon certaines études. Ils peuvent reconnaître leur prénom et même apprendre des tours !',
+    1 ),
+
+  ( 'c0000000-0005-4000-8000-000000000001',
+    'b0000000-0005-4000-8000-000000000001',
+    'Bienvenue dans le champ aromatique du Domaine ! Fermez les yeux un instant et respirez profondément.',
+    'Pour préparer une tisane à la menthe, quelle partie de la plante utilise-t-on ?',
+    'feuilles',
+    'C''est la partie verte et parfumée de la plante !',
+    'On utilise les feuilles de menthe pour faire la tisane ! La menthe est au cœur de la culture tunisienne : le thé à la menthe est une boisson traditionnelle incontournable. La Tunisie est l''un des plus grands producteurs de plantes aromatiques d''Afrique.',
+    1 ),
+
+  ( 'c0000000-0006-4000-8000-000000000001',
+    'b0000000-0006-4000-8000-000000000001',
+    'Les poules caquettent pour vous accueillir ! Ces dames pondeuses travaillent dur chaque jour.',
+    'Combien de jours met un œuf de poule pour éclore ?',
+    '21',
+    'C''est environ 3 semaines... comptez les jours !',
+    'Un œuf de poule met exactement 21 jours pour éclore ! La poule retourne ses œufs plusieurs fois par jour pour assurer le bon développement du poussin. Une poule pond environ 250 à 300 œufs par an. Merci les poules !',
+    1 ),
+
+  ( 'c0000000-0007-4000-8000-000000000001',
+    'b0000000-0007-4000-8000-000000000001',
+    'Cherchez bien... le lapin est peut-être tapi dans son coin. Un animal vif et adorable !',
+    'Comment s''appelle le bébé lapin ?',
+    'lapereau',
+    'C''est un mot proche de "lapin"... en version bébé !',
+    'Le bébé lapin s''appelle le lapereau ! Les lapins ont de très longues oreilles qui leur servent à détecter les prédateurs de loin... mais aussi à réguler leur température corporelle en été en faisant circuler le sang. Pratique sous le soleil tunisien !',
+    1 );
+
+-- ─── Équipes pré-créées (FAM01 à FAM15) ──────────────────────
+INSERT INTO teams (id, session_id, name, status, access_code, is_precreated, locked) VALUES
+  ('d0000000-0001-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'Famille 01', 'waiting', 'FAM01', true, false),
+  ('d0000000-0002-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'Famille 02', 'waiting', 'FAM02', true, false),
+  ('d0000000-0003-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'Famille 03', 'waiting', 'FAM03', true, false),
+  ('d0000000-0004-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'Famille 04', 'waiting', 'FAM04', true, false),
+  ('d0000000-0005-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'Famille 05', 'waiting', 'FAM05', true, false),
+  ('d0000000-0006-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'Famille 06', 'waiting', 'FAM06', true, false),
+  ('d0000000-0007-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'Famille 07', 'waiting', 'FAM07', true, false),
+  ('d0000000-0008-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'Famille 08', 'waiting', 'FAM08', true, false),
+  ('d0000000-0009-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'Famille 09', 'waiting', 'FAM09', true, false),
+  ('d0000000-0010-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'Famille 10', 'waiting', 'FAM10', true, false),
+  ('d0000000-0011-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'Famille 11', 'waiting', 'FAM11', true, false),
+  ('d0000000-0012-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'Famille 12', 'waiting', 'FAM12', true, false),
+  ('d0000000-0013-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'Famille 13', 'waiting', 'FAM13', true, false),
+  ('d0000000-0014-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'Famille 14', 'waiting', 'FAM14', true, false),
+  ('d0000000-0015-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'Famille 15', 'waiting', 'FAM15', true, false);
+
+-- ─── Note ────────────────────────────────────────────────────
+-- Les team_progress sont créées dynamiquement au moment du join
+-- (POST /api/team/join), pas ici.

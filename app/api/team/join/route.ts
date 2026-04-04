@@ -2,52 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import type { ApiResponse } from "@/lib/types";
 
-// GET /api/team/join?access_code=SMU01 — look up a pre-created team
-export async function GET(req: NextRequest) {
-  const accessCode = req.nextUrl.searchParams.get("access_code");
-
-  if (!accessCode) {
-    return NextResponse.json<ApiResponse>(
-      { data: null, error: "access_code required" },
-      { status: 400 }
-    );
-  }
-
-  const supabase = createServerClient();
-
-  const { data: team, error: teamErr } = await supabase
-    .from("teams")
-    .select("*, sessions(*)")
-    .eq("access_code", accessCode.toUpperCase().trim())
-    .single();
-
-  if (teamErr || !team) {
-    return NextResponse.json<ApiResponse>(
-      { data: null, error: "Team code not found." },
-      { status: 404 }
-    );
-  }
-
-  return NextResponse.json<ApiResponse>({
-    data: { team: { ...team, sessions: undefined }, session: team.sessions },
-    error: null,
-  });
-}
-
-// POST /api/team/join — join a pre-created team by access_code
+// POST /api/team/join — rejoindre une équipe pré-créée par son code
 export async function POST(req: NextRequest) {
-  const { access_code, name, character } = await req.json();
+  const { access_code } = await req.json();
 
   if (!access_code) {
     return NextResponse.json<ApiResponse>(
-      { data: null, error: "access_code required" },
+      { data: null, error: "access_code requis" },
       { status: 400 }
     );
   }
 
   const supabase = createServerClient();
 
-  // Find team by access code
+  // Trouver l'équipe par son code
   const { data: team, error: teamErr } = await supabase
     .from("teams")
     .select("*, sessions(*)")
@@ -56,12 +24,12 @@ export async function POST(req: NextRequest) {
 
   if (teamErr || !team) {
     return NextResponse.json<ApiResponse>(
-      { data: null, error: "Code not recognized. Check your Access Key or Team Code." },
+      { data: null, error: "Code non reconnu. Demandez votre code à l'accueil." },
       { status: 404 }
     );
   }
 
-  // If finished, return team data with score (don't block)
+  // Équipe déjà terminée
   if (team.status === "finished") {
     const session = team.sessions;
     return NextResponse.json<ApiResponse>({
@@ -69,15 +37,25 @@ export async function POST(req: NextRequest) {
         team: { ...team, sessions: undefined },
         session,
         finished: true,
+        objects: [],
+        steps: [],
+        progress: [],
       },
       error: null,
     });
   }
 
-  // Update team with player's chosen name/character if provided
+  // Vérifier que la session est active
+  const session = team.sessions;
+  if (!session || session.status !== "active") {
+    return NextResponse.json<ApiResponse>(
+      { data: null, error: "La session n'est pas encore ouverte. Revenez bientôt !" },
+      { status: 403 }
+    );
+  }
+
+  // Marquer l'équipe comme "playing" au premier join
   const updates: Record<string, unknown> = {};
-  if (name) updates.name = name;
-  if (character) updates.character = typeof character === "string" ? character : JSON.stringify(character);
   if (team.status === "waiting") {
     updates.status = "playing";
     updates.started_at = new Date().toISOString();
@@ -87,7 +65,7 @@ export async function POST(req: NextRequest) {
     await supabase.from("teams").update(updates).eq("id", team.id);
   }
 
-  // Get objects + steps + progress
+  // Charger les objets (ordre fixe par colonne "order")
   const sessionId = team.session_id;
   const { data: objects } = await supabase
     .from("objects")
@@ -106,23 +84,21 @@ export async function POST(req: NextRequest) {
     steps = data ?? [];
   }
 
-  // Sort by team's object_order
-  const objOrderIdx = new Map<string, number>((team.object_order ?? []).map((id: string, idx: number) => [id, idx]));
+  // Trier les steps par ordre d'objet
+  const objectOrderMap = new Map((objects ?? []).map((o) => [o.id, o.order]));
   steps.sort((a, b) => {
-    const oa = objOrderIdx.get(a.object_id as string) ?? 999;
-    const ob = objOrderIdx.get(b.object_id as string) ?? 999;
-    if (oa !== ob) return oa - ob;
-    return ((a.order as number) ?? 0) - ((b.order as number) ?? 0);
+    const oa = objectOrderMap.get(a.object_id as string) ?? 0;
+    const ob = objectOrderMap.get(b.object_id as string) ?? 0;
+    return oa - ob;
   });
 
-  // Get or initialize progress
+  // Récupérer ou initialiser la progression
   let { data: progress } = await supabase
     .from("team_progress")
     .select("*")
     .eq("team_id", team.id);
 
   if (!progress || progress.length === 0) {
-    // Initialize progress for this team
     if (steps.length > 0) {
       const entries = steps.map((s, idx) => ({
         team_id: team.id,
@@ -136,8 +112,6 @@ export async function POST(req: NextRequest) {
       progress = created ?? [];
     }
   }
-
-  const session = team.sessions;
 
   return NextResponse.json<ApiResponse>({
     data: {

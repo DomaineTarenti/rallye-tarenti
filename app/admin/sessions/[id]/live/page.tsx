@@ -9,8 +9,11 @@ import {
 } from "lucide-react";
 import { Loader } from "@/components/shared";
 import { supabase } from "@/lib/supabase";
-import { getRank } from "@/lib/scoring";
-import type { ApiResponse, Session, TeamCharacter, Step } from "@/lib/types";
+import type { ApiResponse, Session, Step } from "@/lib/types";
+
+// Compatibilité legacy — scoring supprimé dans Rallye Tarenti
+function getRank(_score: number) { return { label: "—", color: "#2D7D46", key: "bronze" }; }
+type TeamCharacter = Record<string, string>;
 
 const PAGE_SIZE = 50;
 

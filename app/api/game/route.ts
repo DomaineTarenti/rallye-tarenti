@@ -16,20 +16,11 @@ export async function GET(req: NextRequest) {
 
   const supabase = createServerClient();
 
-  // Fetch all in parallel
-  const [teamRes, objectsRes, progressRes, scoringRes] = await Promise.all([
+  // Récupérer tout en parallèle
+  const [teamRes, objectsRes, progressRes] = await Promise.all([
     supabase.from("teams").select("*").eq("id", teamId).single(),
-    supabase
-      .from("objects")
-      .select("*")
-      .eq("session_id", sessionId)
-      .order("order"),
+    supabase.from("objects").select("*").eq("session_id", sessionId).order("order"),
     supabase.from("team_progress").select("*").eq("team_id", teamId),
-    supabase
-      .from("scoring_config")
-      .select("*")
-      .eq("session_id", sessionId)
-      .single(),
   ]);
 
   const objects = objectsRes.data ?? [];
@@ -45,47 +36,20 @@ export async function GET(req: NextRequest) {
     steps = data ?? [];
   }
 
-  // Sort steps by the TEAM's object_order (randomized per team), not DB order
-  const team = teamRes.data;
-  const teamObjectOrder: string[] = team?.object_order ?? [];
-
-  if (teamObjectOrder.length > 0) {
-    const orderIdx = new Map(teamObjectOrder.map((id: string, idx: number) => [id, idx]));
-    steps.sort((a, b) => {
-      const oa = orderIdx.get(a.object_id as string) ?? 999;
-      const ob = orderIdx.get(b.object_id as string) ?? 999;
-      if (oa !== ob) return oa - ob;
-      return ((a.order as number) ?? 0) - ((b.order as number) ?? 0);
-    });
-  } else {
-    // Fallback: sort by DB object order
-    const objectOrderMap = new Map(objects.map((o) => [o.id, o.order]));
-    steps.sort((a, b) => {
-      const oa = objectOrderMap.get(a.object_id as string) ?? 0;
-      const ob = objectOrderMap.get(b.object_id as string) ?? 0;
-      if (oa !== ob) return oa - ob;
-      return ((a.order as number) ?? 0) - ((b.order as number) ?? 0);
-    });
-  }
-
-  // Calculate score
-  const progress = progressRes.data ?? [];
-  const scoring = scoringRes.data;
-  const penaltyPerHint = scoring?.penalty_per_hint ?? 15;
-  const baseScore = scoring?.base_score ?? 1000;
-  const totalHints = progress.reduce(
-    (sum, p) => sum + (p.hints_used ?? 0),
-    0
-  );
-  const score = Math.max(0, baseScore - totalHints * penaltyPerHint);
+  // Trier les steps par ordre d'objet (fixe)
+  const objectOrderMap = new Map(objects.map((o) => [o.id, o.order]));
+  steps.sort((a, b) => {
+    const oa = objectOrderMap.get(a.object_id as string) ?? 0;
+    const ob = objectOrderMap.get(b.object_id as string) ?? 0;
+    return oa - ob;
+  });
 
   return NextResponse.json<ApiResponse>({
     data: {
       team: teamRes.data,
       objects,
       steps,
-      progress,
-      score,
+      progress: progressRes.data ?? [],
     },
     error: null,
   });

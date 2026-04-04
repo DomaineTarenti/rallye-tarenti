@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { Users, QrCode, Loader2, RefreshCw, Download } from "lucide-react";
+import { Users, RefreshCw } from "lucide-react";
 import { Loader } from "@/components/shared";
 import type { ApiResponse, Session } from "@/lib/types";
 
@@ -29,7 +29,6 @@ export default function AdminTeamsPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [teams, setTeams] = useState<TeamData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -54,80 +53,6 @@ export default function AdminTeamsPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  async function generateTeamCardsPdf() {
-    if (!session) return;
-    setGeneratingPdf(true);
-    try {
-      const { jsPDF } = await import("jspdf");
-      const QRCode = (await import("qrcode")).default;
-
-      const doc = new jsPDF("l", "mm", "a4"); // landscape
-      const pageW = 297;
-      const pageH = 210;
-      const cols = 2;
-      const rows = 2;
-      const cardW = (pageW - 30) / cols;
-      const cardH = (pageH - 30) / rows;
-      const precreated = teams.filter((t) => t.access_code);
-
-      for (let i = 0; i < precreated.length; i++) {
-        const team = precreated[i];
-        const pageIdx = Math.floor(i / 4);
-        const pos = i % 4;
-        const col = pos % cols;
-        const row = Math.floor(pos / cols);
-
-        if (i > 0 && pos === 0) doc.addPage();
-
-        const x = 15 + col * cardW;
-        const y = 15 + row * cardH;
-        const color = COLORS[i % COLORS.length];
-
-        // Card border
-        doc.setDrawColor(parseInt(color.slice(1, 3), 16), parseInt(color.slice(3, 5), 16), parseInt(color.slice(5, 7), 16));
-        doc.setLineWidth(1.5);
-        doc.roundedRect(x, y, cardW - 10, cardH - 10, 5, 5, "S");
-
-        // Session name
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(120, 120, 120);
-        doc.text(session.name, x + (cardW - 10) / 2, y + 10, { align: "center" });
-
-        // Team name
-        doc.setFontSize(16);
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(30, 30, 30);
-        doc.text(team.name, x + (cardW - 10) / 2, y + 20, { align: "center" });
-
-        // QR code
-        const url = `https://the-quest.vercel.app?code=${session.code}&team=${team.access_code}`;
-        const qrDataUrl = await QRCode.toDataURL(url, {
-          width: 300, margin: 1, color: { dark: "#1a1a2e", light: "#ffffff" },
-        });
-        const qrSize = 45;
-        doc.addImage(qrDataUrl, "PNG", x + (cardW - 10 - qrSize) / 2, y + 25, qrSize, qrSize);
-
-        // Access code
-        doc.setFontSize(22);
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(parseInt(color.slice(1, 3), 16), parseInt(color.slice(3, 5), 16), parseInt(color.slice(5, 7), 16));
-        doc.text(team.access_code ?? "", x + (cardW - 10) / 2, y + 78, { align: "center" });
-
-        // Footer
-        doc.setFontSize(8);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(150, 150, 150);
-        doc.text("Scannez pour jouer", x + (cardW - 10) / 2, y + 85, { align: "center" });
-      }
-
-      doc.save(`${session.name}-team-cards.pdf`);
-    } catch (err) {
-      console.error("PDF error:", err);
-    }
-    setGeneratingPdf(false);
-  }
-
   if (loading) {
     return <div className="flex h-96 items-center justify-center"><Loader text="Loading teams..." /></div>;
   }
@@ -145,16 +70,7 @@ export default function AdminTeamsPage() {
               {precreated.length} pre-created · {adhoc.length} ad-hoc
             </p>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={generateTeamCardsPdf}
-              disabled={generatingPdf || precreated.length === 0}
-              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {generatingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              Export Team Cards PDF
-            </button>
-          </div>
+          <div className="flex gap-2"></div>
         </div>
 
         {/* Pre-created teams */}
