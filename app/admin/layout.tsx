@@ -112,14 +112,23 @@ export default function AdminLayout({
       {/* Mobile sidebar */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 lg:hidden" onClick={() => setSidebarOpen(false)}>
-          <aside className="h-full w-64 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <aside className="relative h-full w-64 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex h-14 items-center justify-between border-b border-gray-200 px-5">
               <span className="text-sm font-bold">Rallye Tarenti Admin</span>
               <button onClick={() => setSidebarOpen(false)}><X className="h-5 w-5 text-gray-400" /></button>
             </div>
-            <nav className="space-y-0.5 p-3">
+            <nav className="space-y-0.5 p-3 pb-16">
               <NavContent onNav={() => setSidebarOpen(false)} />
             </nav>
+            <div className="absolute bottom-0 left-0 right-0 border-t border-gray-100 p-3">
+              <button
+                onClick={handleLogout}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+              >
+                <LogOut className="h-4 w-4" />
+                Déconnexion
+              </button>
+            </div>
           </aside>
         </div>
       )}

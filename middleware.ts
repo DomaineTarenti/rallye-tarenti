@@ -42,5 +42,6 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*"],
+  // "/admin" seul (sans slash final) + tous les sous-chemins + APIs admin
+  matcher: ["/admin", "/admin/:path*", "/api/admin/:path*"],
 };
