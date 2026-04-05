@@ -241,17 +241,8 @@ export default function CameraPage() {
             <span>{objectName}</span>
           </h1>
         </div>
-        {/* Bouton retournement caméra (visible uniquement en phase camera sans erreur) */}
-        {phase === "camera" && !cameraError && (
-          <button
-            onClick={flipCamera}
-            className="flex items-center justify-center rounded-full bg-black/40 backdrop-blur border border-white/20 text-white"
-            style={{ width: 40, height: 40 }}
-            title={facingMode === "environment" ? "Passer en selfie" : "Caméra arrière"}
-          >
-            <RefreshCw className="h-5 w-5" />
-          </button>
-        )}
+        {/* Espace réservé pour aligner le header */}
+        <div style={{ width: 40, height: 40 }} />
       </div>
 
       {/* Zone caméra / preview */}
@@ -346,13 +337,42 @@ export default function CameraPage() {
       {/* Boutons */}
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-6 pb-8 pt-12 z-10">
         {phase === "camera" && !cameraError && (
-          <button
-            onClick={capture}
-            className="mx-auto flex items-center justify-center rounded-full border-4 border-white bg-white/20 backdrop-blur transition-transform active:scale-90"
-            style={{ width: 72, height: 72 }}
-          >
-            <Camera className="h-8 w-8 text-white" />
-          </button>
+          <div className="flex items-center justify-center gap-8">
+            {/* Flip caméra — toujours visible en phase caméra */}
+            <button
+              onClick={flipCamera}
+              className="flex items-center justify-center rounded-full bg-black/40 backdrop-blur border border-white/30 text-white"
+              style={{ width: 48, height: 48 }}
+              title={facingMode === "environment" ? "Passer en selfie" : "Caméra arrière"}
+            >
+              <RefreshCw className="h-5 w-5" />
+            </button>
+
+            {/* Déclencheur */}
+            <button
+              onClick={capture}
+              className="flex items-center justify-center rounded-full border-4 border-white bg-white/20 backdrop-blur transition-transform active:scale-90"
+              style={{ width: 72, height: 72 }}
+            >
+              <Camera className="h-8 w-8 text-white" />
+            </button>
+
+            {/* Espace symétrique */}
+            <div style={{ width: 48, height: 48 }} />
+          </div>
+        )}
+
+        {/* Flip visible aussi en cas d'erreur caméra (essayer l'autre caméra) */}
+        {phase === "camera" && cameraError && (
+          <div className="mt-3 flex justify-center">
+            <button
+              onClick={flipCamera}
+              className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-2.5 text-sm text-gray-300 backdrop-blur"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Essayer l&apos;autre caméra
+            </button>
+          </div>
         )}
 
         {phase === "preview" && (
