@@ -171,7 +171,11 @@ export default function LiveDashboard() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); supabase.removeChannel(ch); };
   }, [sessionId, debouncedReload]);
 
+  // Tick toutes les 10s pour afficher le temps écoulé
   useEffect(() => { const i = setInterval(() => setTick((t) => t + 1), 10000); return () => clearInterval(i); }, []);
+
+  // Auto-refresh des données toutes les 20s (fallback si Realtime ne reçoit pas les changements RLS)
+  useEffect(() => { const i = setInterval(() => loadData(), 20000); return () => clearInterval(i); }, [loadData]);
 
   // ── Subscription Realtime sur les messages du chat ouvert ──
   useEffect(() => {
