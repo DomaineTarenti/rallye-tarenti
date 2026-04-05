@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { usePlayerStore } from "@/lib/store";
 import { Loader } from "@/components/shared";
+import PwaInstallBanner from "@/components/shared/PwaInstallBanner";
 import type { ApiResponse, Team } from "@/lib/types";
 
 const ANIMALS = ["🐐", "🐄", "🫏", "🐷", "🌿", "🐔", "🐇"];
@@ -202,9 +203,11 @@ export default function OnboardingPage() {
             ))}
           </div>
 
+          <PwaInstallBanner />
+
           <button
             onClick={() => setStep("go")}
-            className="w-full rounded-xl bg-primary py-4 text-lg font-bold text-white transition-all active:scale-95"
+            className="w-full rounded-xl bg-primary py-4 text-lg font-bold text-white transition-all active:scale-95 mt-4"
           >
             À l&apos;aventure ! 🌿
           </button>
