@@ -10,6 +10,7 @@ export const supabase: SupabaseClient = supabaseUrl && supabaseAnonKey
   : createClient("https://placeholder.supabase.co", "placeholder-key");
 
 // Server-side helper — for API routes
+// Utilise la service role key pour bypasser les RLS (les routes API gèrent elles-mêmes l'auth)
 export function createServerClient(cookieHeader?: string) {
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error(
@@ -17,7 +18,10 @@ export function createServerClient(cookieHeader?: string) {
       "Add them to your Vercel Environment Variables."
     );
   }
-  return createClient(supabaseUrl, supabaseAnonKey, {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = serviceRoleKey ?? supabaseAnonKey;
+  return createClient(supabaseUrl, key, {
+    auth: { persistSession: false },
     global: {
       headers: cookieHeader ? { cookie: cookieHeader } : {},
     },
