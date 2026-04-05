@@ -14,7 +14,18 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "tarenti2024";
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+  if (!ADMIN_PASSWORD) {
+    // Env var manquante → bloquer l'accès plutôt que d'utiliser un fallback
+    if (isAdminApi) {
+      return new NextResponse(
+        JSON.stringify({ data: null, error: "Configuration serveur manquante" }),
+        { status: 503, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return NextResponse.redirect(new URL("/admin/login", request.url));
+  }
+
   const cookie = request.cookies.get("admin-auth");
 
   if (!cookie || cookie.value !== ADMIN_PASSWORD) {

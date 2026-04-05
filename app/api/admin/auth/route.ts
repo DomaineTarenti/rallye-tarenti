@@ -3,7 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 // POST /api/admin/auth — connexion admin (définit le cookie)
 export async function POST(req: NextRequest) {
   const { password } = await req.json();
-  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "tarenti2024";
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+  if (!ADMIN_PASSWORD) {
+    return NextResponse.json({ error: "Configuration serveur manquante" }, { status: 503 });
+  }
 
   if (!password || password !== ADMIN_PASSWORD) {
     return NextResponse.json({ error: "Mot de passe incorrect" }, { status: 401 });
