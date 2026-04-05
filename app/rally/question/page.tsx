@@ -29,6 +29,8 @@ export default function QuestionPage() {
   const [pendingOffline, setPendingOffline] = useState(false);
 
   // Indice progressif : 0=non demandé, 1=partiel (50%), 2=complet
+  const [showAnswerReveal, setShowAnswerReveal] = useState(false);
+
   const [hintLevel, setHintLevel] = useState<0 | 1 | 2>(0);
   const [hintText, setHintText] = useState<string | null>(null);
   const [hintUsed, setHintUsed] = useState(false);
@@ -170,6 +172,34 @@ export default function QuestionPage() {
       }
     } catch {
       setErrorMsg("Erreur de connexion. Vérifiez votre réseau.");
+    }
+    setLoading(false);
+  }
+
+  // Révèle la réponse et avance l'étape automatiquement
+  async function giveAnswer() {
+    if (loading) return;
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const res = await submitAnswer(team!.id, currentStep!.id, currentStep!.answer);
+      const json: ApiResponse<AnswerResult> = await res.json();
+      const data = json.data;
+      if (data?.correct) {
+        setFunFact(data.fun_fact ?? "");
+        setPhase("fun_fact");
+        if (session) {
+          const gameRes = await fetch(`/api/game?team_id=${team!.id}&session_id=${session.id}`);
+          const gameJson: ApiResponse = await gameRes.json();
+          if (gameJson.data) {
+            const d = gameJson.data as Record<string, unknown>;
+            setProgress(d.progress as TeamProgress[]);
+            if (d.team) setTeam(d.team as Team);
+          }
+        }
+      }
+    } catch {
+      setErrorMsg("Erreur de connexion. Réessayez.");
     }
     setLoading(false);
   }
@@ -363,6 +393,30 @@ export default function QuestionPage() {
 
         {attempts > 0 && (
           <p className="mt-2 text-center text-xs text-gray-600">{attempts} tentative{attempts > 1 ? "s" : ""}</p>
+        )}
+
+        {/* Bouton "Voir la réponse" après 3 échecs */}
+        {attempts >= 3 && !showAnswerReveal && (
+          <button
+            onClick={() => setShowAnswerReveal(true)}
+            className="mt-4 w-full rounded-xl border border-white/10 bg-surface py-3 text-sm text-gray-500 hover:text-gray-300 transition-colors"
+          >
+            😓 Je donne ma langue au chat…
+          </button>
+        )}
+
+        {showAnswerReveal && (
+          <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-5 py-4 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-red-400">La réponse était…</p>
+            <p className="text-xl font-bold text-white text-center tracking-widest">{currentStep.answer}</p>
+            <button
+              onClick={giveAnswer}
+              disabled={loading}
+              className="w-full rounded-xl bg-red-500/30 border border-red-500/30 py-3 text-sm font-semibold text-red-300 hover:bg-red-500/40 transition-colors disabled:opacity-40"
+            >
+              {loading ? "Passage à la suite..." : "Continuer l'aventure →"}
+            </button>
+          </div>
         )}
       </div>
 
