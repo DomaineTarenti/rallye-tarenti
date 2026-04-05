@@ -18,8 +18,8 @@ export function createServerClient(cookieHeader?: string) {
       "Add them to your Vercel Environment Variables."
     );
   }
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const key = serviceRoleKey ?? supabaseAnonKey;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const key = serviceRoleKey || supabaseAnonKey;
   return createClient(supabaseUrl, key, {
     auth: { persistSession: false },
     global: {
