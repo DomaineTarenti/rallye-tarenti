@@ -48,6 +48,7 @@ export default function LiveDashboard() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [search, setSearch] = useState("");
 
   // Modal states
   const [msgModal, setMsgModal] = useState<{ teamId: string; teamName: string } | null>(null);
@@ -250,13 +251,15 @@ export default function LiveDashboard() {
   const playing = teams.filter((t) => t.status === "playing");
   const finished = teams.filter((t) => t.status === "finished");
   const statusOrder = (s: string) => s === "finished" ? 0 : s === "playing" ? 1 : 2;
-  const sorted = [...teams].sort((a, b) => {
-    const sa = statusOrder(a.status), sb = statusOrder(b.status);
-    if (sa !== sb) return sa - sb;
-    if (a.status === "finished") return (b.final_score ?? 0) - (a.final_score ?? 0);
-    if (a.status === "playing") return b.completed_steps - a.completed_steps;
-    return 0;
-  });
+  const sorted = [...teams]
+    .filter((t) => !search || t.name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => {
+      const sa = statusOrder(a.status), sb = statusOrder(b.status);
+      if (sa !== sb) return sa - sb;
+      if (a.status === "finished") return (b.final_score ?? 0) - (a.final_score ?? 0);
+      if (a.status === "playing") return b.completed_steps - a.completed_steps;
+      return 0;
+    });
   const visible = sorted.slice(0, visibleCount);
 
   return (
@@ -310,9 +313,18 @@ export default function LiveDashboard() {
 
         {/* Table */}
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
-            <h2 className="text-sm font-semibold text-gray-700">Live Rankings</h2>
-            <span className="text-xs text-gray-400">{visible.length} / {sorted.length}</span>
+          <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-3">
+            <h2 className="text-sm font-semibold text-gray-700 shrink-0">Live Rankings</h2>
+            <div className="flex items-center gap-3 ml-auto">
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setVisibleCount(PAGE_SIZE); }}
+                placeholder="Rechercher une équipe..."
+                className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 placeholder-gray-400 focus:border-indigo-400 focus:outline-none w-48"
+              />
+              <span className="text-xs text-gray-400 shrink-0">{visible.length} / {sorted.length}</span>
+            </div>
           </div>
 
           {sorted.length === 0 ? (

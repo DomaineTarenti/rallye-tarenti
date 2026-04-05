@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Lightbulb, MessageCircle, Send, X, CheckCircle, XCircle } from "lucide-react";
 import { usePlayerStore } from "@/lib/store";
@@ -35,10 +35,22 @@ export default function QuestionPage() {
   const [chatMessages, setChatMessages] = useState<Array<{ id: string; message: string; type: string }>>([]);
   const [chatInput, setChatInput] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
+  const [unreadFromGM, setUnreadFromGM] = useState(false);
+  const showChatRef = useRef(false);
+  useEffect(() => { showChatRef.current = showChat; }, [showChat]);
 
-  // Abonnement aux réponses du Game Master
+  // Charger les messages existants + abonnement temps réel
   useEffect(() => {
     if (!team) return;
+    // Charger l'historique au montage
+    supabase
+      .from("team_messages")
+      .select("id, message, type")
+      .eq("team_id", team.id)
+      .in("type", ["message", "player_message"])
+      .order("created_at", { ascending: true })
+      .then(({ data }) => { if (data) setChatMessages(data); });
+
     const ch = supabase
       .channel(`chat-q-${team.id}`)
       .on("postgres_changes", {
@@ -48,8 +60,11 @@ export default function QuestionPage() {
         filter: `team_id=eq.${team.id}`,
       }, (payload) => {
         const msg = payload.new as { id: string; message: string; type: string };
-        if (msg.type === "message") {
-          setChatMessages((prev) => [...prev, msg]);
+        if (msg.type === "message" || msg.type === "player_message") {
+          setChatMessages((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
+          if (msg.type === "message" && !showChatRef.current) {
+            setUnreadFromGM(true);
+          }
         }
       })
       .subscribe();
@@ -311,11 +326,14 @@ export default function QuestionPage() {
           {hintUsed ? "Indice utilisé" : loadingHint ? "..." : "Indice"}
         </button>
         <button
-          onClick={() => setShowChat(!showChat)}
-          className="flex items-center gap-1.5 rounded-xl bg-surface px-4 py-3 text-sm text-gray-400 hover:text-primary"
+          onClick={() => { setShowChat(!showChat); setUnreadFromGM(false); }}
+          className="relative flex items-center gap-1.5 rounded-xl bg-surface px-4 py-3 text-sm text-gray-400 hover:text-primary"
         >
-          <MessageCircle className="h-4 w-4" />
+          <MessageCircle className={`h-4 w-4 ${unreadFromGM ? "text-red-400" : ""}`} />
           <span className="text-sm">Game Master</span>
+          {unreadFromGM && (
+            <span className="absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse ring-2 ring-deep" />
+          )}
         </button>
       </div>
     </main>

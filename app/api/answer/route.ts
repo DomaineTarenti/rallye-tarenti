@@ -42,15 +42,20 @@ export async function POST(req: NextRequest) {
   const correct = normalize(step.answer ?? "") === normalize(String(answer));
 
   if (correct) {
-    // 3. Marquer l'étape comme complétée
-    await supabase
+    // 3. Marquer comme complétée uniquement si encore active (idempotence + race condition)
+    const { data: progressUpdate } = await supabase
       .from("team_progress")
       .update({ status: "completed", completed_at: new Date().toISOString() })
       .eq("team_id", team_id)
-      .eq("step_id", step_id);
+      .eq("step_id", step_id)
+      .eq("status", "active")
+      .select("id")
+      .maybeSingle();
 
-    // 4. Activer l'étape suivante (ou marquer l'équipe "finished")
-    await activateNextStep(supabase, team_id);
+    // 4. Activer l'étape suivante seulement si c'est nous qui venons de compléter
+    if (progressUpdate) {
+      await activateNextStep(supabase, team_id);
+    }
 
     const result: AnswerResult = {
       correct: true,

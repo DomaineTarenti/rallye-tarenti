@@ -35,6 +35,10 @@ export async function activateNextStep(
 
   const objectOrderMap = new Map((allObjects ?? []).map((o) => [o.id, o.order]));
 
+  // Protection race condition : si une étape est déjà active, ne pas en activer une autre
+  const alreadyActive = allProgress.find((p) => p.status === "active");
+  if (alreadyActive) return true;
+
   // Trouver les étapes verrouillées, triées par ordre d'objet
   const stepOrderMap = new Map(allSteps.map((s) => [s.id, objectOrderMap.get(s.object_id) ?? 999]));
 
@@ -43,11 +47,13 @@ export async function activateNextStep(
     .sort((a, b) => (stepOrderMap.get(a.step_id) ?? 999) - (stepOrderMap.get(b.step_id) ?? 999));
 
   if (lockedProgress.length > 0) {
-    // Activer la prochaine étape verrouillée
+    // Protection race condition : mise à jour conditionnelle
+    // (n'affecte la ligne que si elle est encore "locked")
     await supabase
       .from("team_progress")
       .update({ status: "active" })
-      .eq("id", lockedProgress[0].id);
+      .eq("id", lockedProgress[0].id)
+      .eq("status", "locked");
     return true;
   }
 
@@ -75,7 +81,9 @@ export async function activateNextStep(
     })
     .eq("id", teamId);
 
-  console.log(`[RALLYE] Équipe ${teamId} a terminé le rallye en ${completionTime}s`);
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`[RALLYE] Équipe ${teamId} a terminé le rallye en ${completionTime}s`);
+  }
 
   return false;
 }

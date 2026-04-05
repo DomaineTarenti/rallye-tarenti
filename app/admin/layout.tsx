@@ -7,6 +7,7 @@ import {
   Menu,
   X,
   Compass,
+  LogOut,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -23,6 +24,14 @@ export default function AdminLayout({
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // La page de login gère son propre layout
+  if (pathname === "/admin/login") return <>{children}</>;
+
+  async function handleLogout() {
+    await fetch("/api/admin/auth", { method: "DELETE" });
+    router.push("/admin/login");
+  }
 
   const sessionMatch = pathname.match(/\/admin\/sessions\/([^/]+)/);
   const sessionId = sessionMatch ? sessionMatch[1] : null;
@@ -79,13 +88,22 @@ export default function AdminLayout({
   return (
     <div className="flex min-h-screen bg-gray-50 text-gray-900">
       {/* Desktop sidebar */}
-      <aside className="hidden w-60 shrink-0 border-r border-gray-200 bg-white lg:block">
+      <aside className="relative hidden w-60 shrink-0 border-r border-gray-200 bg-white lg:block">
         <div className="flex h-14 items-center gap-2 border-b border-gray-200 px-5">
           <Compass className="h-5 w-5 text-indigo-600" />
           <span className="text-sm font-bold text-gray-900">Rallye Tarenti</span>
           <span className="ml-auto rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600">ADMIN</span>
         </div>
-        <nav className="space-y-0.5 p-3">
+        <div className="absolute bottom-0 left-0 right-0 w-60 border-t border-gray-100 p-3">
+          <button
+            onClick={handleLogout}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+            Déconnexion
+          </button>
+        </div>
+        <nav className="space-y-0.5 p-3 pb-16">
           <NavContent />
         </nav>
       </aside>

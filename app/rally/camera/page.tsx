@@ -27,6 +27,7 @@ export default function CameraPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraFailCount, setCameraFailCount] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [frameLoaded, setFrameLoaded] = useState(false);
 
@@ -58,6 +59,7 @@ export default function CameraPage() {
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
     } catch {
+      setCameraFailCount((c) => c + 1);
       setCameraError("Impossible d'accéder à la caméra. Vérifiez les autorisations.");
     }
   }, []);
@@ -131,55 +133,63 @@ export default function CameraPage() {
     setUploadError(null);
 
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(capturedBlob);
-      reader.onload = async () => {
-        const base64 = (reader.result as string).split(",")[1];
+      // Envoi via FormData (plus léger que base64 JSON)
+      const formData = new FormData();
+      formData.append("team_id", team.id);
+      formData.append("step_id", currentStep.id);
+      formData.append("object_id", currentStep.object_id);
+      formData.append("image", capturedBlob, "photo.jpg");
 
-        const res = await fetch("/api/photo", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            team_id: team!.id,
-            step_id: currentStep!.id,
-            object_id: currentStep!.object_id,
-            image_base64: base64,
-          }),
-        });
-        const json: ApiResponse = await res.json();
+      const res = await fetch("/api/photo", { method: "POST", body: formData });
+      const json: ApiResponse = await res.json();
 
-        if (!res.ok || json.error) {
-          setUploadError("Erreur lors de l'envoi de la photo. Réessayez.");
-          setPhase("preview");
-          return;
-        }
+      if (!res.ok || json.error) {
+        setUploadError("Erreur lors de l'envoi de la photo. Réessayez.");
+        setPhase("preview");
+        return;
+      }
 
-        if (json.data) addPhoto(json.data as never);
+      if (json.data) addPhoto(json.data as never);
 
-        // Rafraîchir la progression
-        if (session) {
-          const gameRes = await fetch(`/api/game?team_id=${team!.id}&session_id=${session.id}`);
-          const gameJson: ApiResponse = await gameRes.json();
-          if (gameJson.data) {
-            const d = gameJson.data as Record<string, unknown>;
-            setProgress(d.progress as never[]);
-            const teamData = d.team as Record<string, unknown>;
-            if (teamData) setTeam(teamData as never);
-            if (teamData?.status === "finished") {
-              setPhase("done");
-              setTimeout(() => router.push("/finish"), 1200);
-              return;
-            }
+      // Rafraîchir la progression
+      if (session) {
+        const gameRes = await fetch(`/api/game?team_id=${team.id}&session_id=${session.id}`);
+        const gameJson: ApiResponse = await gameRes.json();
+        if (gameJson.data) {
+          const d = gameJson.data as Record<string, unknown>;
+          setProgress(d.progress as never[]);
+          const teamData = d.team as Record<string, unknown>;
+          if (teamData) setTeam(teamData as never);
+          if (teamData?.status === "finished") {
+            setPhase("done");
+            setTimeout(() => router.push("/finish"), 1200);
+            return;
           }
         }
+      }
 
-        setPhase("done");
-        setTimeout(() => router.push("/rally"), 1200);
-      };
+      setPhase("done");
+      setTimeout(() => router.push("/rally"), 1200);
     } catch {
       setUploadError("Erreur inattendue. Réessayez.");
       setPhase("preview");
     }
+  }
+
+  async function skipPhoto() {
+    // Passer la photo si la caméra est inaccessible
+    if (!team || !session) { router.push("/rally"); return; }
+    try {
+      const gameRes = await fetch(`/api/game?team_id=${team.id}&session_id=${session.id}`);
+      const gameJson: ApiResponse = await gameRes.json();
+      if (gameJson.data) {
+        const d = gameJson.data as Record<string, unknown>;
+        setProgress(d.progress as never[]);
+        const teamData = d.team as Record<string, unknown>;
+        if (teamData) setTeam(teamData as never);
+      }
+    } catch { /* silent */ }
+    router.push("/rally");
   }
 
   useEffect(() => {
@@ -209,9 +219,17 @@ export default function CameraPage() {
               <div className="flex flex-col items-center justify-center px-8 text-center">
                 <Camera className="h-16 w-16 text-gray-600 mb-4" />
                 <p className="text-sm text-gray-400 mb-6">{cameraError}</p>
-                <button onClick={startCamera} className="rounded-xl bg-primary px-6 py-3 text-white font-medium">
+                <button onClick={startCamera} className="rounded-xl bg-primary px-6 py-3 text-white font-medium mb-3">
                   Réessayer
                 </button>
+                {cameraFailCount >= 2 && (
+                  <button
+                    onClick={skipPhoto}
+                    className="rounded-xl border border-white/20 bg-white/10 px-6 py-3 text-sm text-gray-300 backdrop-blur"
+                  >
+                    Continuer sans photo
+                  </button>
+                )}
               </div>
             ) : (
               <>

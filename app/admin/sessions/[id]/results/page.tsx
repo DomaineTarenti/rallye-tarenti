@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Trophy, Clock, CheckCircle2, Images, Users } from "lucide-react";
+import { Trophy, Clock, CheckCircle2, Images, Users, Download } from "lucide-react";
 import { Loader } from "@/components/shared";
 import type { ApiResponse, Session } from "@/lib/types";
 
@@ -58,6 +58,30 @@ export default function ResultsPage() {
   const playing = teams.filter((t) => t.status === "playing");
   const waiting = teams.filter((t) => t.status === "waiting");
 
+  function downloadCsv() {
+    const rows = [
+      ["Rang", "Équipe", "Statut", "Étapes complétées", "Étapes total", "Indices utilisés", "Temps (s)", "Temps formaté"],
+      ...[...sortedFinished, ...playing, ...waiting].map((t, i) => [
+        t.status === "finished" ? String(i + 1) : "",
+        t.name,
+        t.status,
+        String(t.completed_steps),
+        String(t.total_steps),
+        String(t.hints_used ?? 0),
+        String(t.completion_time ?? ""),
+        t.completion_time ? formatDuration(t.completion_time) : "",
+      ]),
+    ];
+    const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `resultats-${session?.name ?? sessionId}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // Triés par temps de complétion croissant
   const sortedFinished = [...finished].sort((a, b) =>
     (a.completion_time ?? 99999) - (b.completion_time ?? 99999)
@@ -85,13 +109,22 @@ export default function ResultsPage() {
             </h1>
             <p className="mt-0.5 text-sm text-gray-500">{session?.name} · {teams.length} équipes</p>
           </div>
-          <button
-            onClick={() => router.push(`/admin/sessions/${sessionId}/photos`)}
-            className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-          >
-            <Images className="h-4 w-4" />
-            Voir les photos
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={downloadCsv}
+              className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <Download className="h-4 w-4" />
+              CSV
+            </button>
+            <button
+              onClick={() => router.push(`/admin/sessions/${sessionId}/photos`)}
+              className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+            >
+              <Images className="h-4 w-4" />
+              Voir les photos
+            </button>
+          </div>
         </div>
 
         {/* Stats globales */}

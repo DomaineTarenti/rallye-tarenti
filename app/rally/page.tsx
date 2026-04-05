@@ -36,26 +36,39 @@ export default function RallyPage() {
 
   const [dataReady, setDataReady] = useState(false);
 
-  // Recharger l'état du jeu à chaque montage
+  const [loadError, setLoadError] = useState(false);
+
+  // Recharger l'état du jeu à chaque montage (avec retry)
   useEffect(() => {
     if (!team || !session) return;
     setDataReady(false);
+    setLoadError(false);
     (async () => {
-      try {
-        const res = await fetch(`/api/game?team_id=${team.id}&session_id=${session.id}`);
-        const json: ApiResponse = await res.json();
-        if (json.data) {
-          const d = json.data as Record<string, unknown>;
-          setObjects(d.objects as never[]);
-          setSteps(d.steps as never[]);
-          setProgress(d.progress as never[]);
-          const teamData = d.team as Record<string, unknown>;
-          if (teamData?.status === "finished") {
-            router.replace("/finish");
-            return;
+      let lastError: unknown;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await fetch(`/api/game?team_id=${team.id}&session_id=${session.id}`);
+          const json: ApiResponse = await res.json();
+          if (json.data) {
+            const d = json.data as Record<string, unknown>;
+            setObjects(d.objects as never[]);
+            setSteps(d.steps as never[]);
+            setProgress(d.progress as never[]);
+            const teamData = d.team as Record<string, unknown>;
+            if (teamData?.status === "finished") {
+              router.replace("/finish");
+              return;
+            }
           }
+          setDataReady(true);
+          return;
+        } catch (e) {
+          lastError = e;
+          if (attempt < 2) await new Promise((r) => setTimeout(r, 1500));
         }
-      } catch { /* silent */ }
+      }
+      void lastError;
+      setLoadError(true);
       setDataReady(true);
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -150,11 +163,14 @@ export default function RallyPage() {
   // ─── GPS ─────────────────────────────────────────────────────
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
+  const [gpsTimeout, setGpsTimeout] = useState(false);
   const [heading, setHeading] = useState(0);
   const [needsCompassPermission, setNeedsCompassPermission] = useState(false);
   const [gpsDenied, setGpsDenied] = useState(false);
   const headingRef = useRef(0);
   const watchRef = useRef<number | null>(null);
+  const gpsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Étape active
   const activeProgress = progress.find((p) => p.status === "active");
@@ -170,23 +186,33 @@ export default function RallyPage() {
   const completedCount = progress.filter((p) => p.status === "completed" || p.status === "skipped").length;
   const totalSteps = steps.length;
 
-  // Watch GPS
+  // Watch GPS (avec timeout de 30s si pas de position)
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setGpsDenied(true);
       return;
     }
+    // Timeout : si pas de GPS après 30s, proposer de continuer sans
+    gpsTimeoutRef.current = setTimeout(() => setGpsTimeout(true), 30000);
+
     watchRef.current = navigator.geolocation.watchPosition(
       (pos) => {
+        if (gpsTimeoutRef.current) {
+          clearTimeout(gpsTimeoutRef.current);
+          gpsTimeoutRef.current = null;
+        }
+        setGpsTimeout(false);
         setUserLat(pos.coords.latitude);
         setUserLng(pos.coords.longitude);
+        setGpsAccuracy(pos.coords.accuracy ?? null);
         setGpsDenied(false);
       },
       (err) => { if (err.code === err.PERMISSION_DENIED) setGpsDenied(true); },
-      { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
     );
     return () => {
       if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
+      if (gpsTimeoutRef.current) clearTimeout(gpsTimeoutRef.current);
     };
   }, []);
 
@@ -274,6 +300,13 @@ export default function RallyPage() {
     router.push("/rally/question");
   }
 
+  function handleBypassGps() {
+    if (!activeStep) return;
+    setCurrentStep(activeStep);
+    setCurrentStepIndex(completedCount);
+    router.push("/rally/question");
+  }
+
   // ─── Guards ──────────────────────────────────────────────────
   useEffect(() => {
     if (dataReady && !team) router.push("/");
@@ -319,6 +352,19 @@ export default function RallyPage() {
     return (
       <main className="flex min-h-[100dvh] items-center justify-center bg-deep">
         <p className="text-sm text-gray-500">Chargement...</p>
+      </main>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <main className="flex min-h-[100dvh] flex-col items-center justify-center bg-deep px-6 text-center">
+        <div className="text-5xl mb-4">📡</div>
+        <h2 className="text-lg font-bold text-white mb-2">Problème réseau</h2>
+        <p className="text-sm text-gray-400 mb-6">Impossible de charger le jeu. Vérifiez votre connexion.</p>
+        <button onClick={() => window.location.reload()} className="rounded-xl bg-primary px-8 py-3 text-white font-bold">
+          Réessayer
+        </button>
       </main>
     );
   }
@@ -387,6 +433,18 @@ export default function RallyPage() {
           <div className="h-full w-full flex flex-col items-center justify-center bg-gray-900">
             <Navigation className="h-10 w-10 text-gray-600 animate-pulse mb-3" />
             <p className="text-sm text-gray-500">Acquisition GPS...</p>
+            {gpsTimeout && (
+              <div className="mt-4 flex flex-col items-center gap-2">
+                <p className="text-xs text-amber-400 text-center px-4">GPS lent à répondre. Êtes-vous déjà sur place ?</p>
+                <button
+                  onClick={handleBypassGps}
+                  disabled={!activeStep}
+                  className="rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 px-5 py-2.5 text-sm font-medium"
+                >
+                  Continuer sans GPS
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -403,21 +461,28 @@ export default function RallyPage() {
 
       {/* ─── Distance + flèche boussole ─────────────────────── */}
       {userLat != null && !isInGeofence && (
-        <div className="flex items-center justify-center gap-4 py-3 shrink-0">
-          {/* Petite flèche directionnelle */}
-          <svg
-            viewBox="0 0 40 40"
-            className="h-8 w-8 transition-transform duration-300 shrink-0"
-            style={{ transform: `rotate(${arrowAngle}deg)` }}
-          >
-            <polygon points="20,4 14,24 20,20 26,24" fill={distColor} />
-            <circle cx="20" cy="20" r="3" fill={distColor} fillOpacity={0.5} />
-          </svg>
-          <p className="text-3xl font-black" style={{ color: distColor }}>
-            {distance != null ? formatDistance(distance) : "..."}
-          </p>
-          {distance != null && distance < 30 && (
-            <p className="text-sm text-amber-400 font-medium">Approche !</p>
+        <div className="flex flex-col items-center py-3 shrink-0">
+          <div className="flex items-center justify-center gap-4">
+            {/* Petite flèche directionnelle */}
+            <svg
+              viewBox="0 0 40 40"
+              className="h-8 w-8 transition-transform duration-300 shrink-0"
+              style={{ transform: `rotate(${arrowAngle}deg)` }}
+            >
+              <polygon points="20,4 14,24 20,20 26,24" fill={distColor} />
+              <circle cx="20" cy="20" r="3" fill={distColor} fillOpacity={0.5} />
+            </svg>
+            <p className="text-3xl font-black" style={{ color: distColor }}>
+              {distance != null ? formatDistance(distance) : "..."}
+            </p>
+            {distance != null && distance < 30 && (
+              <p className="text-sm text-amber-400 font-medium">Approche !</p>
+            )}
+          </div>
+          {gpsAccuracy != null && gpsAccuracy > 20 && (
+            <p className="mt-1 text-[10px] text-gray-600">
+              Précision GPS : ±{Math.round(gpsAccuracy)}m
+            </p>
           )}
         </div>
       )}
