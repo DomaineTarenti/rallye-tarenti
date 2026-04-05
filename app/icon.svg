@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Fond carré arrondi vert Tarenti -->
+  <rect width="32" height="32" rx="7" fill="#2D7D46"/>
+
+  <!-- Cercle extérieur du compas -->
+  <circle cx="16" cy="16" r="10" stroke="white" stroke-width="1.5" fill="none" opacity="0.6"/>
+
+  <!-- Aiguille Nord (pointe blanche vers le haut) -->
+  <polygon points="16,6 18.2,15 16,13.5 13.8,15" fill="white"/>
+
+  <!-- Aiguille Sud (pointe sombre vers le bas) -->
+  <polygon points="16,26 13.8,17 16,18.5 18.2,17" fill="white" opacity="0.4"/>
+
+  <!-- Point central -->
+  <circle cx="16" cy="16" r="1.8" fill="white"/>
+</svg>
