@@ -38,7 +38,6 @@ export default function AdminLayout({
   const isNewSession = pathname === "/admin/sessions/new";
 
   const sessionSubnav = sessionId && !isNewSession ? [
-    { label: "Configure", href: `/admin/sessions/${sessionId}` },
     { label: "Équipes", href: `/admin/sessions/${sessionId}/teams` },
     { label: "Live", href: `/admin/sessions/${sessionId}/live` },
     { label: "GPS", href: `/admin/sessions/${sessionId}/gps` },
