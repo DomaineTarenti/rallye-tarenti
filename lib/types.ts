@@ -6,6 +6,7 @@ export interface Session {
   name: string;
   code: string;
   status: SessionStatus;
+  description?: string | null;
   logo_url: string | null;
   primary_color: string | null;
   created_at: string;
