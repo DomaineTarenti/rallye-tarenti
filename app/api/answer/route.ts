@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { activateNextStep } from "@/lib/progress";
+import { checkRateLimit } from "@/lib/rate-limit";
 import type { ApiResponse, AnswerResult } from "@/lib/types";
 
 // POST /api/answer — vérifier la réponse d'une équipe
@@ -11,6 +12,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json<ApiResponse>(
       { data: null, error: "team_id, step_id et answer requis" },
       { status: 400 }
+    );
+  }
+
+  // Rate limiting : max 15 tentatives par équipe par minute
+  const rl = checkRateLimit(`answer:${team_id}`, 15, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json<ApiResponse>(
+      { data: null, error: `Trop de tentatives. Réessayez dans ${rl.retryAfter}s.` },
+      { status: 429 }
     );
   }
 

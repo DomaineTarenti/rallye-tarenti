@@ -9,7 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { usePlayerStore } from "@/lib/store";
 import { getDistance, getBearing, formatDistance, getDistanceColor } from "@/lib/geo";
 import { GEOFENCE_RADIUS_M } from "@/lib/constants";
-import type { ApiResponse } from "@/lib/types";
+import type { ApiResponse, QuestObject, Step, TeamProgress } from "@/lib/types";
 
 // Leaflet chargé côté client uniquement
 const RallyMap = dynamic(() => import("@/components/RallyMap"), {
@@ -51,9 +51,9 @@ export default function RallyPage() {
           const json: ApiResponse = await res.json();
           if (json.data) {
             const d = json.data as Record<string, unknown>;
-            setObjects(d.objects as never[]);
-            setSteps(d.steps as never[]);
-            setProgress(d.progress as never[]);
+            setObjects(d.objects as QuestObject[]);
+            setSteps(d.steps as Step[]);
+            setProgress(d.progress as TeamProgress[]);
             const teamData = d.team as Record<string, unknown>;
             if (teamData?.status === "finished") {
               router.replace("/finish");

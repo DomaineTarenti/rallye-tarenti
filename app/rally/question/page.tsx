@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Lightbulb, MessageCircle, Send, X, CheckCircle, XCircle } from "lucide-react";
 import { usePlayerStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
-import type { ApiResponse, AnswerResult, Team } from "@/lib/types";
+import type { ApiResponse, AnswerResult, Team, TeamProgress } from "@/lib/types";
 
 type Phase = "question" | "fun_fact";
 
@@ -25,7 +25,11 @@ export default function QuestionPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [attempts, setAttempts] = useState(0);
 
-  // Hint
+  // Offline queue — réponses en attente de réseau
+  const [pendingOffline, setPendingOffline] = useState(false);
+
+  // Indice progressif : 0=non demandé, 1=partiel (50%), 2=complet
+  const [hintLevel, setHintLevel] = useState<0 | 1 | 2>(0);
   const [hintText, setHintText] = useState<string | null>(null);
   const [hintUsed, setHintUsed] = useState(false);
   const [loadingHint, setLoadingHint] = useState(false);
@@ -81,35 +85,82 @@ export default function QuestionPage() {
   const objectName = targetObject?.name ?? "Animal";
   const objectEmoji = targetObject?.emoji ?? "🐾";
 
+  // Soumission avec queue offline
+  async function submitAnswer(teamId: string, stepId: string, answerText: string) {
+    const res = await fetch("/api/answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team_id: teamId, step_id: stepId, answer: answerText }),
+    });
+    return res;
+  }
+
+  // Flush la queue offline dès que le réseau revient
+  useEffect(() => {
+    if (!team || !currentStep) return;
+    const queueKey = `offline-answer-${team.id}-${currentStep.id}`;
+
+    async function flushQueue() {
+      const saved = localStorage.getItem(queueKey);
+      if (!saved) return;
+      const { answerText } = JSON.parse(saved) as { answerText: string };
+      try {
+        const res = await submitAnswer(team!.id, currentStep!.id, answerText);
+        const json: ApiResponse<AnswerResult> = await res.json();
+        if (json.data?.correct) {
+          localStorage.removeItem(queueKey);
+          setPendingOffline(false);
+          setFunFact(json.data.fun_fact ?? "");
+          setPhase("fun_fact");
+          if (session) {
+            const gameRes = await fetch(`/api/game?team_id=${team!.id}&session_id=${session!.id}`);
+            const gameJson: ApiResponse = await gameRes.json();
+            if (gameJson.data) {
+              const d = gameJson.data as Record<string, unknown>;
+              setProgress(d.progress as TeamProgress[]);
+              if (d.team) setTeam(d.team as Team);
+            }
+          }
+        }
+      } catch { /* restera en queue */ }
+    }
+
+    // Essayer au montage (si réseau présent)
+    if (navigator.onLine) flushQueue();
+    window.addEventListener("online", flushQueue);
+    return () => window.removeEventListener("online", flushQueue);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [team?.id, currentStep?.id]);
+
   async function handleAnswer(e: React.FormEvent) {
     e.preventDefault();
     if (!answer.trim() || loading) return;
     setLoading(true);
     setErrorMsg(null);
 
+    // Offline : sauvegarder localement et attendre le réseau
+    if (!navigator.onLine) {
+      const queueKey = `offline-answer-${team!.id}-${currentStep!.id}`;
+      localStorage.setItem(queueKey, JSON.stringify({ answerText: answer.trim() }));
+      setPendingOffline(true);
+      setLoading(false);
+      return;
+    }
+
     try {
-      const res = await fetch("/api/answer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          team_id: team!.id,
-          step_id: currentStep!.id,
-          answer: answer.trim(),
-        }),
-      });
+      const res = await submitAnswer(team!.id, currentStep!.id, answer.trim());
       const json: ApiResponse<AnswerResult> = await res.json();
       const data = json.data;
 
       if (data?.correct) {
         setFunFact(data.fun_fact ?? "");
         setPhase("fun_fact");
-        // Rafraîchir la progression (et le statut équipe si dernière étape)
         if (session) {
           const gameRes = await fetch(`/api/game?team_id=${team!.id}&session_id=${session.id}`);
           const gameJson: ApiResponse = await gameRes.json();
           if (gameJson.data) {
             const d = gameJson.data as Record<string, unknown>;
-            setProgress(d.progress as never[]);
+            setProgress(d.progress as TeamProgress[]);
             if (d.team) setTeam(d.team as Team);
           }
         }
@@ -118,29 +169,48 @@ export default function QuestionPage() {
         setErrorMsg(data?.message ?? "Mauvaise réponse, essayez encore !");
       }
     } catch {
-      setErrorMsg("Erreur de connexion.");
+      setErrorMsg("Erreur de connexion. Vérifiez votre réseau.");
     }
     setLoading(false);
   }
 
+  // Indice progressif : 1er clic → indice partiel, 2e clic → indice complet
   async function handleHint() {
-    if (hintUsed || loadingHint) return;
-    setLoadingHint(true);
-    try {
-      const res = await fetch("/api/hint", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ team_id: team!.id, step_id: currentStep!.id }),
-      });
-      const json: ApiResponse = await res.json();
-      if (json.data) {
-        const data = json.data as Record<string, unknown>;
-        setHintText(data.hint_text as string);
-        setHintUsed(true);
-      }
-    } catch { /* silent */ }
-    setLoadingHint(false);
+    if (loadingHint) return;
+
+    // Niveau 2 : déjà l'indice en main, juste afficher la suite
+    if (hintLevel === 1 && hintText) {
+      setHintLevel(2);
+      return;
+    }
+
+    // Niveau 1 : demander l'indice au serveur (coûte 1 hints_used)
+    if (hintLevel === 0) {
+      setLoadingHint(true);
+      try {
+        const res = await fetch("/api/hint", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ team_id: team!.id, step_id: currentStep!.id }),
+        });
+        const json: ApiResponse = await res.json();
+        if (json.data) {
+          const data = json.data as Record<string, unknown>;
+          setHintText(data.hint_text as string);
+          setHintUsed(true);
+          setHintLevel(1);
+        }
+      } catch { /* silent */ }
+      setLoadingHint(false);
+    }
   }
+
+  // Texte affiché selon le niveau
+  const hintDisplayText = hintText
+    ? hintLevel === 1
+      ? hintText.slice(0, Math.ceil(hintText.length * 0.5)) + "…"
+      : hintText
+    : null;
 
   async function sendChatMessage() {
     if (!team || !session || !chatInput.trim()) return;
@@ -233,11 +303,31 @@ export default function QuestionPage() {
           <p className="text-base font-medium text-white leading-relaxed">{currentStep.question}</p>
         </div>
 
-        {/* Indice */}
-        {hintText && (
+        {/* Indice progressif */}
+        {hintDisplayText && (
           <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3">
-            <p className="text-xs font-semibold text-amber-400 mb-1">💡 Indice</p>
-            <p className="text-sm text-gray-200">{hintText}</p>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs font-semibold text-amber-400">
+                💡 Indice {hintLevel === 1 ? "(partiel)" : "(complet)"}
+              </p>
+              {hintLevel === 1 && (
+                <button
+                  onClick={() => setHintLevel(2)}
+                  className="text-[10px] font-semibold text-amber-300 underline"
+                >
+                  Voir plus
+                </button>
+              )}
+            </div>
+            <p className="text-sm text-gray-200">{hintDisplayText}</p>
+          </div>
+        )}
+
+        {/* Message offline en attente */}
+        {pendingOffline && (
+          <div className="mb-4 flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3">
+            <span className="text-lg">📶</span>
+            <p className="text-sm text-amber-300">Réponse sauvegardée — envoi automatique dès que le réseau revient</p>
           </div>
         )}
 
@@ -313,9 +403,9 @@ export default function QuestionPage() {
       <div className="flex gap-2 px-4 pb-6 pt-2">
         <button
           onClick={handleHint}
-          disabled={hintUsed || loadingHint || !currentStep.hint}
+          disabled={(hintLevel === 2) || loadingHint || !currentStep.hint}
           className={`flex items-center gap-1.5 rounded-xl px-4 py-3 text-sm font-medium transition ${
-            hintUsed
+            hintLevel === 2
               ? "bg-amber-400/10 text-amber-400/50 cursor-default"
               : currentStep.hint
               ? "bg-amber-400/20 text-amber-400 hover:bg-amber-400/30"
@@ -323,7 +413,7 @@ export default function QuestionPage() {
           }`}
         >
           <Lightbulb className="h-4 w-4" />
-          {hintUsed ? "Indice utilisé" : loadingHint ? "..." : "Indice"}
+          {hintLevel === 2 ? "Indice complet" : hintLevel === 1 ? "Suite de l'indice" : loadingHint ? "..." : "Indice"}
         </button>
         <button
           onClick={() => { setShowChat(!showChat); setUnreadFromGM(false); }}

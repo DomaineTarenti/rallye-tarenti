@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, RotateCcw, Check, Loader, RefreshCw } from "lucide-react";
 import { usePlayerStore } from "@/lib/store";
-import type { ApiResponse } from "@/lib/types";
+import type { ApiResponse, Photo, TeamProgress, Team } from "@/lib/types";
 
 type Phase = "camera" | "preview" | "uploading" | "done";
 
@@ -181,7 +181,7 @@ export default function CameraPage() {
         return;
       }
 
-      if (json.data) addPhoto(json.data as never);
+      if (json.data) addPhoto(json.data as Photo);
 
       // Rafraîchir la progression
       if (session) {
@@ -189,9 +189,9 @@ export default function CameraPage() {
         const gameJson: ApiResponse = await gameRes.json();
         if (gameJson.data) {
           const d = gameJson.data as Record<string, unknown>;
-          setProgress(d.progress as never[]);
+          setProgress(d.progress as TeamProgress[]);
           const teamData = d.team as Record<string, unknown>;
-          if (teamData) setTeam(teamData as never);
+          if (teamData) setTeam(teamData as unknown as Team);
           if (teamData?.status === "finished") {
             setPhase("done");
             setTimeout(() => router.push("/finish"), 1200);
@@ -216,9 +216,9 @@ export default function CameraPage() {
       const gameJson: ApiResponse = await gameRes.json();
       if (gameJson.data) {
         const d = gameJson.data as Record<string, unknown>;
-        setProgress(d.progress as never[]);
+        setProgress(d.progress as TeamProgress[]);
         const teamData = d.team as Record<string, unknown>;
-        if (teamData) setTeam(teamData as never);
+        if (teamData) setTeam(teamData as unknown as Team);
       }
     } catch { /* silent */ }
     router.push("/rally");

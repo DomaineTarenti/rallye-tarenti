@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { usePlayerStore } from "@/lib/store";
 import { Loader } from "@/components/shared";
-import type { ApiResponse } from "@/lib/types";
+import type { ApiResponse, Session, Team, QuestObject, Step, TeamProgress } from "@/lib/types";
 
 function HomeContent() {
   const [code, setCode] = useState("");
@@ -59,11 +59,11 @@ function HomeContent() {
       const store = usePlayerStore.getState();
       joiningRef.current = true; // bloquer le useEffect de redirection automatique
 
-      store.setSession(data.session as never);
-      store.setTeam(data.team as never);
-      store.setObjects(data.objects as never[]);
-      store.setSteps(data.steps as never[]);
-      store.setProgress(data.progress as never[]);
+      store.setSession(data.session as Session);
+      store.setTeam(data.team as Team);
+      store.setObjects(data.objects as QuestObject[]);
+      store.setSteps(data.steps as Step[]);
+      store.setProgress(data.progress as TeamProgress[]);
 
       // Équipe déjà terminée → résultats
       if ((data.team as Record<string, unknown>).status === "finished") {

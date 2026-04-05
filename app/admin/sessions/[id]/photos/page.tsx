@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { Download, Images, Loader2, CheckCircle2 } from "lucide-react";
+import { Download, Images, Loader2, CheckCircle2, Radio } from "lucide-react";
 import { Loader } from "@/components/shared";
+import { supabase } from "@/lib/supabase";
 import type { ApiResponse } from "@/lib/types";
 
 interface PhotoEntry {
@@ -40,6 +41,8 @@ export default function PhotosPage() {
   const [loading, setLoading] = useState(true);
   const [downloadingTeam, setDownloadingTeam] = useState<string | null>(null);
   const [downloadedTeams, setDownloadedTeams] = useState<Set<string>>(new Set());
+  const [liveMode, setLiveMode] = useState(true);
+  const [newPhotoCount, setNewPhotoCount] = useState(0);
 
   const loadPhotos = useCallback(async () => {
     setLoading(true);
@@ -75,6 +78,22 @@ export default function PhotosPage() {
   }, [sessionId]);
 
   useEffect(() => { loadPhotos(); }, [loadPhotos]);
+
+  // Abonnement Realtime : recharge les photos dès qu'une nouvelle arrive
+  useEffect(() => {
+    const ch = supabase
+      .channel(`photos-live-${sessionId}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "photos",
+      }, () => {
+        setNewPhotoCount((n) => n + 1);
+        loadPhotos();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [sessionId, loadPhotos]);
 
   async function downloadTeamPhotos(group: TeamGroup) {
     setDownloadingTeam(group.team_id);
@@ -114,13 +133,62 @@ export default function PhotosPage() {
               {groups.length} équipe{groups.length > 1 ? "s" : ""} · {totalPhotos} photo{totalPhotos > 1 ? "s" : ""}
             </p>
           </div>
-          <button
-            onClick={loadPhotos}
-            className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
-          >
-            Actualiser
-          </button>
+          <div className="flex items-center gap-2">
+            {newPhotoCount > 0 && (
+              <span className="flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
+                +{newPhotoCount} nouvelles
+              </span>
+            )}
+            <button
+              onClick={() => setLiveMode((v) => !v)}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                liveMode
+                  ? "bg-green-600 text-white hover:bg-green-700"
+                  : "border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              <Radio className="h-3.5 w-3.5" />
+              {liveMode ? "Live" : "Manuel"}
+            </button>
+            <button
+              onClick={() => { loadPhotos(); setNewPhotoCount(0); }}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              Actualiser
+            </button>
+          </div>
         </div>
+
+        {/* Vue live : toutes les photos à la suite, ordre chronologique inversé */}
+        {liveMode && groups.length > 0 && (
+          <div className="mb-8 overflow-hidden rounded-xl border border-green-200 bg-white">
+            <div className="flex items-center gap-2 border-b border-green-100 bg-green-50 px-5 py-3">
+              <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-sm font-semibold text-green-800">Flux live — photos les plus récentes</span>
+              <span className="ml-auto text-xs text-green-600">{totalPhotos} total</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 p-4 sm:grid-cols-4 lg:grid-cols-6">
+              {groups
+                .flatMap((g) => g.photos.map((p) => ({ ...p, team_name: g.team_name })))
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                .map((photo, i) => (
+                  <div key={photo.id} className="group relative overflow-hidden rounded-lg bg-gray-100 aspect-square">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={photo.storage_url}
+                      alt={photo.objects?.name ?? `Photo ${i + 1}`}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
+                      <p className="text-[10px] font-semibold text-white truncate">{(photo as typeof photo & { team_name: string }).team_name}</p>
+                      <p className="text-[9px] text-white/70">{photo.objects?.emoji} {photo.objects?.name}</p>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
 
         {groups.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-300 bg-white p-16 text-center">

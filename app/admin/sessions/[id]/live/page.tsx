@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   Users, Clock, Hexagon, AlertTriangle, Unlock, MessageSquare,
   Timer, StopCircle, RefreshCw, CheckCircle2, Loader2, ChevronDown,
-  X, Check, Flag, Send,
+  X, Check, Flag, Send, Bell, BellOff,
 } from "lucide-react";
 import { Loader } from "@/components/shared";
 import { supabase } from "@/lib/supabase";
@@ -62,6 +62,25 @@ export default function LiveDashboard() {
   const [helpTeamId, setHelpTeamId] = useState<string | null>(null);
 
   const [unreadTeams, setUnreadTeams] = useState<Set<string>>(new Set());
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | "unsupported">("default");
+
+  useEffect(() => {
+    if (typeof Notification === "undefined") { setNotifPermission("unsupported"); return; }
+    setNotifPermission(Notification.permission);
+  }, []);
+
+  async function requestNotifPermission() {
+    if (typeof Notification === "undefined") return;
+    const perm = await Notification.requestPermission();
+    setNotifPermission(perm);
+  }
+
+  function sendBrowserNotif(title: string, body: string) {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    try {
+      new Notification(title, { body, icon: "/icon-192.png", tag: "rallye-alert" });
+    } catch { /* silent */ }
+  }
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const msgModalRef = useRef<{ teamId: string; teamName: string } | null>(null);
@@ -110,11 +129,17 @@ export default function LiveDashboard() {
         if (msg.type === "help_request") {
           setHelpAlert({ teamName: "", step: 0, message: msg.message });
           setHelpTeamId(msg.team_id ?? null);
-          // Sound notification
+          // Son d'alerte
           try { new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1saWBnbXV3dnZxbW5ydHRxbnF0d3d0cG1vc3Z3dHBtb3N2d3RxbnF1eHd0cXF0eHl3dHJ0eHp5d3V1eXt6eHZ2eXt7eXd2eHp7end3eHp7e3p4eHp8fHt5eXt8fXt6ent9fn18e3x+f359fH1/gH9+fX6AgYB/fn+BgoGAf4CBgoKBgIGCg4OCgYKDhIOCgoOEhYSDg4SFhoWEhIWGh4aFhYaHiIeGhoeIiYiHh4iJioqJiImKi4uKiYqLjIyLiouMjY2Mi4yNjo6NjI2Oj4+OjY6PkJCPjo+QkZGQj5CRkpKRkJGSk5OSkZKTlJSTkpOU").play().catch(() => {}); } catch { /* no audio */ }
-          // Change tab title
+          // Notification browser
+          sendBrowserNotif("🆘 Aide demandée !", msg.message ?? "Une équipe a besoin d'aide");
+          // Titre de l'onglet
           document.title = "\u{1F198} Rallye Tarenti — Help needed!";
           setTimeout(() => { document.title = "Rallye Tarenti Admin"; setHelpAlert(null); setHelpTeamId(null); }, 15000);
+        }
+        // Notification browser pour les messages joueurs
+        if (msg.type === "player_message") {
+          sendBrowserNotif("💬 Message d'une équipe", msg.message ?? "");
         }
         // Son discret pour les messages normaux des joueurs
         if (msg.type === "player_message") {
@@ -283,6 +308,25 @@ export default function LiveDashboard() {
             <p className="mt-0.5 text-sm text-gray-500">{session?.name} · {playing.length} playing · {finished.length} finished</p>
           </div>
           <div className="flex gap-2">
+            {notifPermission !== "unsupported" && notifPermission !== "granted" && (
+              <button
+                onClick={requestNotifPermission}
+                className="flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+                title="Recevoir des alertes même si l'onglet est en arrière-plan"
+              >
+                <Bell className="h-3.5 w-3.5" /> Alertes
+              </button>
+            )}
+            {notifPermission === "granted" && (
+              <span className="flex items-center gap-1 rounded-lg bg-green-50 px-3 py-2 text-xs font-medium text-green-700">
+                <Bell className="h-3.5 w-3.5" /> Alertes ON
+              </span>
+            )}
+            {notifPermission === "denied" && (
+              <span className="flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-2 text-xs text-gray-500">
+                <BellOff className="h-3.5 w-3.5" /> Alertes bloquées
+              </span>
+            )}
             <button onClick={loadData} className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">
               <RefreshCw className="h-3.5 w-3.5" /> Refresh
             </button>

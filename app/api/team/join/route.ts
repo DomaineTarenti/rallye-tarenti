@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
+import { checkRateLimit } from "@/lib/rate-limit";
 import type { ApiResponse } from "@/lib/types";
 
 // POST /api/team/join — rejoindre une équipe pré-créée par son code
@@ -10,6 +11,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json<ApiResponse>(
       { data: null, error: "access_code requis" },
       { status: 400 }
+    );
+  }
+
+  // Rate limiting : max 10 tentatives par IP par minute (anti brute-force des codes)
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? "unknown";
+  const rl = checkRateLimit(`join:${ip}`, 10, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json<ApiResponse>(
+      { data: null, error: `Trop de tentatives. Réessayez dans ${rl.retryAfter}s.` },
+      { status: 429 }
     );
   }
 
