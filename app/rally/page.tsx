@@ -171,6 +171,10 @@ export default function RallyPage() {
   const headingRef = useRef(0);
   const watchRef = useRef<number | null>(null);
   const gpsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Position lissée : lat/lng actuels pour le filtre exponentiel
+  const smoothedLatRef = useRef<number | null>(null);
+  const smoothedLngRef = useRef<number | null>(null);
+  const bestAccuracyRef = useRef<number>(Infinity);
 
   // Étape active
   const activeProgress = progress.find((p) => p.status === "active");
@@ -202,13 +206,33 @@ export default function RallyPage() {
           gpsTimeoutRef.current = null;
         }
         setGpsTimeout(false);
-        setUserLat(pos.coords.latitude);
-        setUserLng(pos.coords.longitude);
-        setGpsAccuracy(pos.coords.accuracy ?? null);
         setGpsDenied(false);
+
+        const { latitude, longitude, accuracy } = pos.coords;
+        const acc = accuracy ?? 999;
+
+        // Ignorer les positions très imprécises si on a déjà mieux
+        if (acc > 80 && bestAccuracyRef.current < 40) return;
+
+        // Mettre à jour la meilleure précision connue
+        if (acc < bestAccuracyRef.current) bestAccuracyRef.current = acc;
+
+        // Lissage exponentiel — alpha fort (0.6) si bonne précision, faible (0.2) si mauvaise
+        const alpha = acc < 20 ? 0.7 : acc < 50 ? 0.5 : 0.25;
+        if (smoothedLatRef.current === null || smoothedLngRef.current === null) {
+          smoothedLatRef.current = latitude;
+          smoothedLngRef.current = longitude;
+        } else {
+          smoothedLatRef.current = smoothedLatRef.current + alpha * (latitude - smoothedLatRef.current);
+          smoothedLngRef.current = smoothedLngRef.current + alpha * (longitude - smoothedLngRef.current);
+        }
+
+        setUserLat(smoothedLatRef.current);
+        setUserLng(smoothedLngRef.current);
+        setGpsAccuracy(acc);
       },
       (err) => { if (err.code === err.PERMISSION_DENIED) setGpsDenied(true); },
-      { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
     );
     return () => {
       if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
@@ -479,9 +503,9 @@ export default function RallyPage() {
               <p className="text-sm text-amber-400 font-medium">Approche !</p>
             )}
           </div>
-          {gpsAccuracy != null && gpsAccuracy > 20 && (
-            <p className="mt-1 text-[10px] text-gray-600">
-              Précision GPS : ±{Math.round(gpsAccuracy)}m
+          {gpsAccuracy != null && (
+            <p className={`mt-1 text-[10px] ${gpsAccuracy <= 15 ? "text-green-600" : gpsAccuracy <= 40 ? "text-gray-600" : "text-amber-500"}`}>
+              GPS ±{Math.round(gpsAccuracy)}m {gpsAccuracy <= 15 ? "✓" : gpsAccuracy > 40 ? "— signal faible" : ""}
             </p>
           )}
         </div>
