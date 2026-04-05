@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, RotateCcw, Check, Loader } from "lucide-react";
+import { Camera, RotateCcw, Check, Loader, RefreshCw } from "lucide-react";
 import { usePlayerStore } from "@/lib/store";
 import type { ApiResponse } from "@/lib/types";
 
@@ -30,6 +30,9 @@ export default function CameraPage() {
   const [cameraFailCount, setCameraFailCount] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [frameLoaded, setFrameLoaded] = useState(false);
+  const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
+  // Orientation réelle de la vidéo (détectée au moment de la capture)
+  const [isLandscape, setIsLandscape] = useState(false);
 
   const targetObject = currentStep ? objects.find((o) => o.id === currentStep.object_id) : null;
   const objectName = targetObject?.name ?? "Animal";
@@ -43,13 +46,14 @@ export default function CameraPage() {
     img.onerror = () => setFrameLoaded(false); // cadre optionnel
   }, []);
 
-  // Démarrer la caméra (arrière, portrait 3:4)
-  const startCamera = useCallback(async () => {
+  // Démarrer la caméra avec le mode choisi (arrière ou selfie)
+  const startCamera = useCallback(async (mode: "environment" | "user" = "environment") => {
     setCameraError(null);
+    streamRef.current?.getTracks().forEach((t) => t.stop());
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: { ideal: "environment" },
+          facingMode: { ideal: mode },
           width: { ideal: 1080 },
           height: { ideal: 1440 },
           aspectRatio: { ideal: 0.75 },
@@ -65,9 +69,16 @@ export default function CameraPage() {
   }, []);
 
   useEffect(() => {
-    startCamera();
+    startCamera(facingMode);
     return () => { streamRef.current?.getTracks().forEach((t) => t.stop()); };
-  }, [startCamera]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function flipCamera() {
+    const newMode = facingMode === "environment" ? "user" : "environment";
+    setFacingMode(newMode);
+    await startCamera(newMode);
+  }
 
   useEffect(() => {
     if (phase !== "camera") streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -78,7 +89,16 @@ export default function CameraPage() {
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
 
-    const W = 900, H = 1200; // portrait 3:4
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh) return;
+
+    // Détecter l'orientation réelle du flux vidéo
+    const landscape = vw > vh;
+    setIsLandscape(landscape);
+
+    // Dimensions finales : 3:2 paysage ou 2:3 portrait
+    const W = landscape ? 1200 : 800;
+    const H = landscape ? 800 : 1200;
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext("2d");
@@ -87,8 +107,7 @@ export default function CameraPage() {
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, W, H);
 
-    // Crop centré pour correspondre au ratio portrait
-    const vw = video.videoWidth, vh = video.videoHeight;
+    // Crop centré pour remplir le canvas sans déformation
     const targetRatio = W / H;
     const videoRatio = vw / vh;
     let sx = 0, sy = 0, sw = vw, sh = vh;
@@ -99,11 +118,24 @@ export default function CameraPage() {
       sh = vw / targetRatio;
       sy = (vh - sh) / 2;
     }
-    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, W, H);
 
-    // Superposer le cadre Tarenti si disponible
+    // Miroir horizontal pour la caméra frontale (effet selfie naturel)
+    if (facingMode === "user") {
+      ctx.save();
+      ctx.scale(-1, 1);
+      ctx.translate(-W, 0);
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, W, H);
+      ctx.restore();
+    } else {
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, W, H);
+    }
+
+    // Logo Tarenti en bas à droite — taille proportionnelle, sans déformation
     if (frameRef.current && frameLoaded) {
-      ctx.drawImage(frameRef.current, 0, 0, W, H);
+      const logoH = Math.round(H * 0.18); // 18% de la hauteur
+      const logoW = Math.round(logoH * (frameRef.current.naturalWidth / frameRef.current.naturalHeight));
+      const margin = Math.round(H * 0.025);
+      ctx.drawImage(frameRef.current, W - logoW - margin, H - logoH - margin, logoW, logoH);
     }
 
     canvas.toBlob(
@@ -124,7 +156,7 @@ export default function CameraPage() {
     setCapturedBlob(null);
     setUploadError(null);
     setPhase("camera");
-    startCamera();
+    startCamera(facingMode);
   }
 
   async function validate() {
@@ -144,7 +176,7 @@ export default function CameraPage() {
       const json: ApiResponse = await res.json();
 
       if (!res.ok || json.error) {
-        setUploadError("Erreur lors de l'envoi de la photo. Réessayez.");
+        setUploadError(json.error ?? "Erreur lors de l'envoi de la photo. Réessayez.");
         setPhase("preview");
         return;
       }
@@ -209,6 +241,17 @@ export default function CameraPage() {
             <span>{objectName}</span>
           </h1>
         </div>
+        {/* Bouton retournement caméra (visible uniquement en phase camera sans erreur) */}
+        {phase === "camera" && !cameraError && (
+          <button
+            onClick={flipCamera}
+            className="flex items-center justify-center rounded-full bg-black/40 backdrop-blur border border-white/20 text-white"
+            style={{ width: 40, height: 40 }}
+            title={facingMode === "environment" ? "Passer en selfie" : "Caméra arrière"}
+          >
+            <RefreshCw className="h-5 w-5" />
+          </button>
+        )}
       </div>
 
       {/* Zone caméra / preview */}
@@ -219,7 +262,7 @@ export default function CameraPage() {
               <div className="flex flex-col items-center justify-center px-8 text-center">
                 <Camera className="h-16 w-16 text-gray-600 mb-4" />
                 <p className="text-sm text-gray-400 mb-6">{cameraError}</p>
-                <button onClick={startCamera} className="rounded-xl bg-primary px-6 py-3 text-white font-medium mb-3">
+                <button onClick={() => startCamera(facingMode)} className="rounded-xl bg-primary px-6 py-3 text-white font-medium mb-3">
                   Réessayer
                 </button>
                 {cameraFailCount >= 2 && (
@@ -233,7 +276,14 @@ export default function CameraPage() {
               </div>
             ) : (
               <>
-                <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="h-full w-full object-cover"
+                  style={{ transform: facingMode === "user" ? "scaleX(-1)" : "none" }}
+                />
                 {/* Overlay cadre PNG Domaine Tarenti */}
                 {frameLoaded && (
                   <img

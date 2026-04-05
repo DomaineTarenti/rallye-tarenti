@@ -64,19 +64,21 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const fileName = `${team_id}/${step_id ?? Date.now()}_${Date.now()}.jpg`;
+  const rand = Math.random().toString(36).slice(2, 7);
+  const fileName = `${team_id}/${step_id ?? "no-step"}_${Date.now()}_${rand}.jpg`;
 
   // Uploader dans le bucket "team-photos"
   const { error: uploadError } = await supabase.storage
     .from("team-photos")
     .upload(fileName, buffer, {
       contentType: "image/jpeg",
-      upsert: false,
+      upsert: true,
     });
 
   if (uploadError) {
+    console.error("[PHOTO] Storage upload error:", uploadError.message, "| bucket: team-photos | file:", fileName);
     return NextResponse.json<ApiResponse>(
-      { data: null, error: `Erreur upload: ${uploadError.message}` },
+      { data: null, error: `Erreur upload Storage: ${uploadError.message}` },
       { status: 500 }
     );
   }
@@ -108,8 +110,9 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (dbError) {
+    console.error("[PHOTO] DB insert error:", dbError.message);
     return NextResponse.json<ApiResponse>(
-      { data: null, error: dbError.message },
+      { data: null, error: `Erreur base de données: ${dbError.message}` },
       { status: 500 }
     );
   }
